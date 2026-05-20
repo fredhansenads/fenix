@@ -290,6 +290,10 @@ label {
   gap: 16px;
 }
 
+.grid > * {
+  min-width: 0;
+}
+
 .kpi-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -304,6 +308,7 @@ label {
 
 .card,
 .panel {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -347,8 +352,14 @@ label {
   padding: 18px;
 }
 
+.panel-body.table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
 .data-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
 }
 
@@ -369,6 +380,17 @@ label {
 .data-table td:last-child {
   text-align: right;
   white-space: nowrap;
+}
+
+.table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.table-actions button {
+  min-height: 36px;
+  padding: 0 12px;
 }
 
 .status {
@@ -506,11 +528,4 @@ label {
     grid-template-columns: 1fr;
   }
 
-  .data-table {
-    min-width: 720px;
-  }
-
-  .panel-body.table-wrap {
-    overflow-x: auto;
-  }
 }

@@ -79,8 +79,6 @@ document.querySelector("#loginForm").addEventListener("submit", handleLogin);
 document.querySelector("#logoutButton").addEventListener("click", handleLogout);
 document.querySelector("#menuButton").addEventListener("click", () => sidebar.classList.toggle("open"));
 
-boot();
-
 function boot() {
   hydrateReferences();
   if (state.session) {
@@ -97,7 +95,27 @@ function loadState() {
     localStorage.setItem(STORE_KEY, JSON.stringify(seeded));
     return seeded;
   }
-  return JSON.parse(saved);
+  return normalizeState(JSON.parse(saved));
+}
+
+function normalizeState(savedState) {
+  const normalized = { ...structuredClone(initialData), ...savedState };
+  [
+    "users",
+    "clients",
+    "suppliers",
+    "categories",
+    "payables",
+    "receivables",
+    "proposals",
+    "projects",
+    "tasks"
+  ].forEach((collection) => {
+    if (!Array.isArray(normalized[collection])) {
+      normalized[collection] = [];
+    }
+  });
+  return normalized;
 }
 
 function saveState() {
@@ -225,7 +243,18 @@ function navigate(moduleId) {
     users: () => renderCrud("users"),
     settings: renderSettings
   };
-  renderers[module.id]();
+  try {
+    renderers[module.id]();
+  } catch (error) {
+    content.innerHTML = `
+      <section class="card">
+        <p class="eyebrow">Erro de renderizacao</p>
+        <h3>Nao foi possivel carregar este modulo.</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </section>
+    `;
+    console.error(error);
+  }
 }
 
 function money(value) {
@@ -434,15 +463,30 @@ function renderCrud(schemaId) {
         <button type="button" class="secondary" data-export="${schema.collection}">Exportar CSV</button>
       </div>
     </section>
-    <section class="grid two-columns">
-      <div class="panel">
-        <div class="panel-header"><h3>Lista</h3></div>
-        <div class="panel-body table-wrap">${renderTable(schemaId, items, true)}</div>
+    <section class="panel">
+      <div class="panel-header"><h3>Lista</h3></div>
+      <div class="panel-body table-wrap">${renderTable(schemaId, items, true)}</div>
+    </section>
+  `;
+  bindCrud(schemaId);
+}
+
+function renderCrudForm(schemaId, item = {}) {
+  const schema = schemas[schemaId];
+  const isEditing = Boolean(item.id);
+  content.innerHTML = `
+    <section class="toolbar">
+      <div>
+        <p class="eyebrow">${isEditing ? "Edicao" : "Cadastro"}</p>
+        <h3>${isEditing ? `Editar ${schema.label}` : `Novo ${schema.label}`}</h3>
       </div>
-      <div id="formPanel" class="panel">
-        <div class="panel-header"><h3>Novo ${schema.label}</h3></div>
-        <div class="panel-body">${renderForm(schemaId)}</div>
+      <div class="toolbar-actions">
+        <button type="button" class="secondary" data-cancel-edit="${schemaId}">Voltar para lista</button>
       </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h3>Dados do ${schema.label}</h3></div>
+      <div class="panel-body">${renderForm(schemaId, item, true)}</div>
     </section>
   `;
   bindCrud(schemaId);
@@ -454,7 +498,7 @@ function renderTable(schemaId, items, actions = true) {
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
   const rows = items.map((item) => {
     const cells = schema.columns.map((column) => `<td>${formatCell(column, item[column])}</td>`).join("");
-    const actionCell = actions ? `<td><button class="secondary" type="button" data-edit="${schemaId}:${item.id}">Editar</button> <button class="danger" type="button" data-delete="${schemaId}:${item.id}">Excluir</button></td>` : "";
+    const actionCell = actions ? `<td><div class="table-actions"><button class="secondary" type="button" data-edit="${schemaId}:${item.id}">Editar</button><button class="danger" type="button" data-delete="${schemaId}:${item.id}">Excluir</button></div></td>` : "";
     return `<tr>${cells}${actionCell}</tr>`;
   }).join("");
   return `<table class="data-table"><thead><tr>${headings}${actions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -493,7 +537,7 @@ function formatCell(column, value) {
   return value || "-";
 }
 
-function renderForm(schemaId, item = {}) {
+function renderForm(schemaId, item = {}, showCancel = false) {
   const schema = schemas[schemaId];
   const fields = schema.fields.map(([name, label, type, options, className]) => {
     const value = item[name] || "";
@@ -504,7 +548,7 @@ function renderForm(schemaId, item = {}) {
       ${fields}
       <div class="full toolbar-actions">
         <button type="submit">${item.id ? "Salvar alteracoes" : "Cadastrar"}</button>
-        ${item.id ? `<button type="button" class="secondary" data-cancel-edit="${schemaId}">Cancelar</button>` : ""}
+        ${showCancel ? `<button type="button" class="secondary" data-cancel-edit="${schemaId}">Cancelar</button>` : ""}
       </div>
     </form>
   `;
@@ -524,6 +568,9 @@ function renderInput(name, type, value, options) {
 
 function bindCrud(schemaId) {
   content.querySelector(`[data-form="${schemaId}"]`)?.addEventListener("submit", (event) => saveForm(event, schemaId));
+  content.querySelectorAll("[data-new]").forEach((button) => {
+    button.addEventListener("click", () => renderCrudForm(button.dataset.new));
+  });
   content.querySelectorAll("[data-edit]").forEach((button) => {
     button.addEventListener("click", () => editItem(button.dataset.edit));
   });
@@ -591,6 +638,10 @@ function editItem(payload) {
   const [schemaId, id] = payload.split(":");
   const schema = schemas[schemaId];
   const item = state[schema.collection].find((record) => record.id === id);
+  if (!["payables", "receivables"].includes(schemaId)) {
+    renderCrudForm(schemaId, item);
+    return;
+  }
   const panel = document.querySelector("#formPanel");
   const formMarkup = `<div class="panel-header"><h3>Editar ${schema.label}</h3></div><div class="panel-body">${renderForm(schemaId, item)}</div>`;
   if (panel) {
@@ -765,3 +816,5 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+boot();
