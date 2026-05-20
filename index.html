@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FÊNIX</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="loginScreen" class="login-screen">
+      <section class="login-panel" aria-labelledby="loginTitle">
+        <div class="brand-mark">F</div>
+        <p class="eyebrow">FÊNIX</p>
+        <h1 id="loginTitle">Gestao centralizada para crescimento com controle.</h1>
+        <form id="loginForm" class="login-form">
+          <label>
+            E-mail
+            <input id="loginEmail" type="email" autocomplete="username" required />
+          </label>
+          <label>
+            Senha
+            <input id="loginPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Entrar no ERP</button>
+          <p id="loginMessage" class="form-message" role="alert"></p>
+        </form>
+        <div class="demo-access">
+          <strong>Acesso inicial</strong>
+          <span>admin@santus.com / santus123</span>
+        </div>
+      </section>
+    </main>
+
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark small">F</div>
+          <div>
+            <strong>FÊNIX</strong>
+            <span>SANTUS ERP</span>
+          </div>
+        </div>
+        <nav id="mainNav" class="nav-list" aria-label="Modulos do ERP"></nav>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <button id="menuButton" class="icon-button" type="button" aria-label="Abrir menu">☰</button>
+          <div>
+            <p id="pageKicker" class="eyebrow">Dashboard</p>
+            <h2 id="pageTitle">Visao geral</h2>
+          </div>
+          <div class="user-menu">
+            <span id="currentUser"></span>
+            <button id="logoutButton" type="button">Sair</button>
+          </div>
+        </header>
+
+        <section id="content" class="content" aria-live="polite"></section>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
