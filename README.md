@@ -32,6 +32,7 @@ node server.js
 - Projetos
 - Tarefas
 - Relatorios com exportacao CSV
+- Historico de atividades
 - Configuracoes administrativas
 
 ## Observacao tecnica
@@ -58,6 +59,10 @@ E tambem expoe rotas por modulo para preparar a migracao futura:
 
 O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `projects` e `tasks`.
 
+O historico de atividades pode ser consultado em:
+
+- `GET /api/activity-log`
+
 As rotas modulares ja aplicam validacao basica no servidor:
 
 - Campos obrigatorios por modulo
@@ -65,5 +70,7 @@ As rotas modulares ja aplicam validacao basica no servidor:
 - Valores financeiros maiores que zero
 - Datas no formato `AAAA-MM-DD`
 - E-mails em formato valido para clientes, fornecedores e usuarios
+
+As acoes feitas pelas rotas modulares tambem geram auditoria inicial em `auditLogs`, com criacao, edicao, exclusao, usuario informado pelo frontend, modulo, registro e campos alterados.
 
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

@@ -121,6 +121,11 @@ async function handleApi(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/activity-log") {
+    await handleActivityLogApi(request, response);
+    return;
+  }
+
   const match = requestUrl.pathname.match(/^\/api\/([a-z]+)(?:\/([^/]+))?$/);
   if (match && collections.has(match[1])) {
     await handleCollectionApi(request, response, match[1], match[2]);
@@ -140,7 +145,14 @@ async function handleStateApi(request, response) {
   if (request.method === "PUT") {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    await writeDatabase(payload);
+    const database = await readDatabase();
+    const currentLog = database.exists && Array.isArray(database.data.auditLogs) ? database.data.auditLogs : [];
+    const payloadLog = Array.isArray(payload.auditLogs) ? payload.auditLogs : [];
+    const nextPayload = {
+      ...payload,
+      auditLogs: currentLog.length >= payloadLog.length ? currentLog : payloadLog
+    };
+    await writeDatabase(nextPayload);
     sendJson(response, 200, { ok: true });
     return;
   }
@@ -148,10 +160,22 @@ async function handleStateApi(request, response) {
   sendJson(response, 405, { error: "Method not allowed" });
 }
 
+async function handleActivityLogApi(request, response) {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const database = await readDatabase();
+  const data = database.exists ? database.data : {};
+  sendJson(response, 200, Array.isArray(data.auditLogs) ? data.auditLogs : []);
+}
+
 async function handleCollectionApi(request, response, collection, id) {
   const database = await readDatabase();
   const data = database.exists ? database.data : {};
   data[collection] = Array.isArray(data[collection]) ? data[collection] : [];
+  data.auditLogs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
 
   if (request.method === "GET") {
     if (id) {
@@ -173,8 +197,9 @@ async function handleCollectionApi(request, response, collection, id) {
       return;
     }
     data[collection].push(item);
+    const auditLog = addActivityLog(data, request, "created", collection, item);
     await writeDatabase(data);
-    sendJson(response, 201, item);
+    sendJson(response, 201, { ...item, auditLog });
     return;
   }
 
@@ -186,31 +211,71 @@ async function handleCollectionApi(request, response, collection, id) {
       sendJson(response, 404, { error: "Record not found" });
       return;
     }
-    const item = normalizeRecord(collection, { ...data[collection][index], ...payload, id });
+    const previousItem = data[collection][index];
+    const item = normalizeRecord(collection, { ...previousItem, ...payload, id });
     const validation = validateRecord(collection, item);
     if (!validation.valid) {
       sendJson(response, 400, validation);
       return;
     }
     data[collection][index] = item;
+    const auditLog = addActivityLog(data, request, "updated", collection, item, previousItem);
     await writeDatabase(data);
-    sendJson(response, 200, data[collection][index]);
+    sendJson(response, 200, { ...data[collection][index], auditLog });
     return;
   }
 
   if (request.method === "DELETE" && id) {
+    const item = data[collection].find((record) => record.id === id);
     const before = data[collection].length;
     data[collection] = data[collection].filter((record) => record.id !== id);
     if (data[collection].length === before) {
       sendJson(response, 404, { error: "Record not found" });
       return;
     }
+    const auditLog = addActivityLog(data, request, "deleted", collection, item);
     await writeDatabase(data);
-    sendJson(response, 200, { ok: true });
+    sendJson(response, 200, { ok: true, auditLog });
     return;
   }
 
   sendJson(response, 405, { error: "Method not allowed" });
+}
+
+function addActivityLog(data, request, action, collection, item, previousItem = null) {
+  const actor = getActor(request);
+  const auditLog = {
+    id: createId(),
+    action,
+    collection,
+    recordId: item?.id || "",
+    recordLabel: getRecordLabel(item),
+    actorId: actor.id,
+    actorName: actor.name,
+    actorRole: actor.role,
+    changedFields: previousItem ? getChangedFields(previousItem, item) : [],
+    createdAt: new Date().toISOString()
+  };
+
+  data.auditLogs = [auditLog, ...(Array.isArray(data.auditLogs) ? data.auditLogs : [])].slice(0, 200);
+  return auditLog;
+}
+
+function getActor(request) {
+  return {
+    id: request.headers["x-fenix-user-id"] || "local",
+    name: request.headers["x-fenix-user-name"] || "Usuario local",
+    role: request.headers["x-fenix-user-role"] || "sistema"
+  };
+}
+
+function getRecordLabel(item) {
+  return item?.name || item?.title || item?.description || item?.email || item?.id || "registro";
+}
+
+function getChangedFields(previousItem, item) {
+  const fields = new Set([...Object.keys(previousItem || {}), ...Object.keys(item || {})]);
+  return [...fields].filter((field) => JSON.stringify(previousItem[field]) !== JSON.stringify(item[field]));
 }
 
 function normalizeRecord(collection, record) {

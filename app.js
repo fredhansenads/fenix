@@ -11,6 +11,7 @@ const modules = [
   { id: "projects", label: "Projetos", title: "Projetos", roles: ["admin", "gestor", "operacional", "comercial"] },
   { id: "tasks", label: "Tarefas", title: "Tarefas", roles: ["admin", "gestor", "operacional", "colaborador"] },
   { id: "reports", label: "Relatorios", title: "Relatorios", roles: ["admin", "gestor", "financeiro", "comercial"] },
+  { id: "activity", label: "Historico", title: "Historico de atividades", roles: ["admin", "gestor"] },
   { id: "users", label: "Usuarios", title: "Usuarios e permissoes", roles: ["admin"] },
   { id: "settings", label: "Configuracoes", title: "Configuracoes administrativas", roles: ["admin"] }
 ];
@@ -27,6 +28,7 @@ const roleLabels = {
 
 const initialData = {
   session: null,
+  auditLogs: [],
   users: [
     { id: uid(), name: "Administrador SANTUS", email: "admin@santus.com", password: "santus123", role: "admin", status: "ativo" },
     { id: uid(), name: "Gestor Comercial", email: "comercial@santus.com", password: "santus123", role: "comercial", status: "ativo" }
@@ -122,7 +124,8 @@ function normalizeState(savedState) {
     "receivables",
     "proposals",
     "projects",
-    "tasks"
+    "tasks",
+    "auditLogs"
   ].forEach((collection) => {
     if (!Array.isArray(normalized[collection])) {
       normalized[collection] = [];
@@ -174,10 +177,16 @@ async function apiRequest(path, options = {}) {
   }
 
   try {
+    const user = getSessionUser();
     const response = await fetch(path, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(user ? {
+          "X-Fenix-User-Id": user.id,
+          "X-Fenix-User-Name": user.name,
+          "X-Fenix-User-Role": user.role
+        } : {}),
         ...(options.headers || {})
       }
     });
@@ -199,10 +208,12 @@ async function saveRecordToApi(collection, item, isEditing) {
     return null;
   }
 
-  return apiRequest(collectionApiPath(collection, isEditing ? item.id : ""), {
+  const result = await apiRequest(collectionApiPath(collection, isEditing ? item.id : ""), {
     method: isEditing ? "PUT" : "POST",
     body: JSON.stringify(item)
   });
+  addAuditLogFromApi(result?.auditLog);
+  return result;
 }
 
 async function deleteRecordFromApi(collection, id) {
@@ -210,7 +221,16 @@ async function deleteRecordFromApi(collection, id) {
     return null;
   }
 
-  return apiRequest(collectionApiPath(collection, id), { method: "DELETE" });
+  const result = await apiRequest(collectionApiPath(collection, id), { method: "DELETE" });
+  addAuditLogFromApi(result?.auditLog);
+  return result;
+}
+
+function addAuditLogFromApi(auditLog) {
+  if (!auditLog) return;
+  state.auditLogs = [auditLog, ...(Array.isArray(state.auditLogs) ? state.auditLogs : [])]
+    .filter((item, index, logs) => logs.findIndex((log) => log.id === item.id) === index)
+    .slice(0, 200);
 }
 
 function hydrateReferences() {
@@ -336,6 +356,7 @@ function navigate(moduleId) {
     projects: () => renderCrud("projects"),
     tasks: () => renderCrud("tasks"),
     reports: renderReports,
+    activity: renderActivity,
     users: () => renderCrud("users"),
     settings: renderSettings
   };
@@ -1271,13 +1292,139 @@ function renderReportInsights(reports) {
   `;
 }
 
+function renderActivity() {
+  const logs = Array.isArray(state.auditLogs) ? state.auditLogs : [];
+  content.innerHTML = `
+    <section class="toolbar">
+      <div>
+        <p class="eyebrow">Auditoria</p>
+        <h3>${logs.length} atividade${logs.length === 1 ? "" : "s"} registrada${logs.length === 1 ? "" : "s"}</h3>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" class="secondary" data-refresh-activity>Atualizar</button>
+        <button type="button" class="secondary" data-export="auditLogs">Exportar CSV</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h3>Eventos recentes</h3><span class="status neutral">ultimos 200 registros</span></div>
+      <div class="panel-body table-wrap" data-activity-table>${renderActivityTable(logs)}</div>
+    </section>
+  `;
+  bindActivity();
+  refreshActivityLog();
+}
+
+function bindActivity() {
+  content.querySelector("[data-refresh-activity]")?.addEventListener("click", refreshActivityLog);
+  content.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", () => exportCsv(button.dataset.export)));
+}
+
+async function refreshActivityLog() {
+  const logs = await loadActivityLog();
+  if (!logs) return;
+  state.auditLogs = logs;
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  const table = content.querySelector("[data-activity-table]");
+  const title = content.querySelector(".toolbar h3");
+  if (table) table.innerHTML = renderActivityTable(logs);
+  if (title) title.textContent = `${logs.length} atividade${logs.length === 1 ? "" : "s"} registrada${logs.length === 1 ? "" : "s"}`;
+}
+
+async function loadActivityLog() {
+  if (!location.protocol.startsWith("http")) {
+    return null;
+  }
+
+  try {
+    const response = await fetch("/api/activity-log", { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+function renderActivityTable(logs) {
+  if (!logs.length) {
+    return `<div class="empty-state">Nenhuma atividade registrada ainda.</div>`;
+  }
+
+  return `
+    <table class="data-table">
+      <thead>
+        <tr><th>Data</th><th>Acao</th><th>Modulo</th><th>Registro</th><th>Usuario</th><th>Campos</th></tr>
+      </thead>
+      <tbody>
+        ${logs.map((log) => `
+          <tr>
+            <td>${formatDateTime(log.createdAt)}</td>
+            <td><span class="status ${activityTone(log.action)}">${activityActionLabel(log.action)}</span></td>
+            <td>${activityCollectionLabel(log.collection)}</td>
+            <td>${escapeHtml(log.recordLabel || log.recordId || "-")}</td>
+            <td>${escapeHtml(log.actorName || "Usuario local")}</td>
+            <td>${formatChangedFields(log.changedFields)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function activityTone(action) {
+  if (action === "created") return "success";
+  if (action === "updated") return "warning";
+  if (action === "deleted") return "danger";
+  return "neutral";
+}
+
+function activityActionLabel(action) {
+  const labels = {
+    created: "Criado",
+    updated: "Atualizado",
+    deleted: "Excluido"
+  };
+  return labels[action] || labelize(action);
+}
+
+function activityCollectionLabel(collection) {
+  const labels = {
+    users: "Usuarios",
+    clients: "Clientes",
+    suppliers: "Fornecedores",
+    categories: "Categorias",
+    payables: "Contas a pagar",
+    receivables: "Contas a receber",
+    proposals: "Propostas",
+    projects: "Projetos",
+    tasks: "Tarefas"
+  };
+  return labels[collection] || labelize(collection);
+}
+
+function formatChangedFields(fields) {
+  return Array.isArray(fields) && fields.length ? fields.map(columnLabel).join(", ") : "-";
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function renderSettings() {
   content.innerHTML = `
     <section class="grid two-columns">
       <article class="card">
         <p class="eyebrow">Seguranca</p>
         <h3>Politicas administrativas</h3>
-        <p>O MVP ja controla acesso por perfil. As proximas camadas recomendadas sao senha criptografada no backend, auditoria, 2FA e sessoes seguras por cookie HTTP-only.</p>
+        <p>O MVP ja controla acesso por perfil e registra historico basico de atividades. As proximas camadas recomendadas sao senha criptografada no backend, 2FA e sessoes seguras por cookie HTTP-only.</p>
       </article>
       <article class="card">
         <p class="eyebrow">Roadmap</p>
