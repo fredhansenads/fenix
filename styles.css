@@ -285,6 +285,14 @@ label {
   gap: 10px;
 }
 
+.search-field {
+  min-width: min(280px, 100%);
+}
+
+.search-field input {
+  min-width: 240px;
+}
+
 .grid {
   display: grid;
   gap: 16px;

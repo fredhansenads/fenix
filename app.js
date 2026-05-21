@@ -66,6 +66,7 @@ const initialData = {
 
 let state = structuredClone(initialData);
 let activeModule = "dashboard";
+const listFilters = {};
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -493,23 +494,40 @@ const schemas = {
 function renderCrud(schemaId) {
   const schema = schemas[schemaId];
   const items = state[schema.collection];
+  const query = listFilters[schemaId] || "";
+  const filteredItems = filterItems(schemaId, items, query);
+  const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
   content.innerHTML = `
     <section class="toolbar">
       <div>
         <p class="eyebrow">Cadastro</p>
-        <h3>${items.length} ${schema.label}${items.length === 1 ? "" : "s"}</h3>
+        <h3 data-list-count="${schemaId}">${totalLabel} ${schema.label}${filteredItems.length === 1 ? "" : "s"}</h3>
       </div>
       <div class="toolbar-actions">
+        <label class="search-field">
+          Buscar
+          <input type="search" data-search="${schemaId}" value="${escapeHtml(query)}" placeholder="Digite para filtrar" />
+        </label>
         <button type="button" data-new="${schemaId}">Novo ${schema.label}</button>
         <button type="button" class="secondary" data-export="${schema.collection}">Exportar CSV</button>
       </div>
     </section>
     <section class="panel">
       <div class="panel-header"><h3>Lista</h3></div>
-      <div class="panel-body table-wrap">${renderTable(schemaId, items, true)}</div>
+      <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, filteredItems, true, query)}</div>
     </section>
   `;
   bindCrud(schemaId);
+}
+
+function filterItems(schemaId, items, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return items;
+
+  const schema = schemas[schemaId];
+  return items.filter((item) => {
+    return schema.columns.some((column) => normalizeText(formatCellText(column, item[column])).includes(normalizedQuery));
+  });
 }
 
 function renderCrudForm(schemaId, item = {}) {
@@ -533,9 +551,12 @@ function renderCrudForm(schemaId, item = {}) {
   bindCrud(schemaId);
 }
 
-function renderTable(schemaId, items, actions = true) {
+function renderTable(schemaId, items, actions = true, query = "") {
   const schema = schemas[schemaId];
-  if (!items.length) return `<div class="empty-state">Nenhum registro encontrado.</div>`;
+  if (!items.length) {
+    const message = query ? "Nenhum registro encontrado para esta busca." : `Nenhum ${schema.label} cadastrado ainda.`;
+    return `<div class="empty-state">${message}</div>`;
+  }
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
   const rows = items.map((item) => {
     const cells = schema.columns.map((column) => `<td>${formatCell(column, item[column])}</td>`).join("");
@@ -578,6 +599,24 @@ function formatCell(column, value) {
   return value || "-";
 }
 
+function formatCellText(column, value) {
+  if (["amount"].includes(column)) return money(value);
+  if (["status", "priority", "role"].includes(column)) return roleLabels[value] || labelize(value);
+  if (column === "clientId") return state.clients.find((item) => item.id === value)?.name || "";
+  if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "";
+  if (column === "projectId") return state.projects.find((item) => item.id === value)?.name || "";
+  if (column === "responsibleId") return state.users.find((item) => item.id === value)?.name || "";
+  return value || "";
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function renderForm(schemaId, item = {}, showCancel = false) {
   const schema = schemas[schemaId];
   const fields = schema.fields.map(([name, label, type, options, className]) => {
@@ -609,6 +648,12 @@ function renderInput(name, type, value, options) {
 
 function bindCrud(schemaId) {
   content.querySelector(`[data-form="${schemaId}"]`)?.addEventListener("submit", (event) => saveForm(event, schemaId));
+  content.querySelectorAll("[data-search]").forEach((input) => {
+    input.addEventListener("input", () => {
+      listFilters[input.dataset.search] = input.value;
+      refreshCrudList(input.dataset.search);
+    });
+  });
   content.querySelectorAll("[data-new]").forEach((button) => {
     button.addEventListener("click", () => renderCrudForm(button.dataset.new));
   });
@@ -623,6 +668,30 @@ function bindCrud(schemaId) {
   });
   content.querySelectorAll("[data-export]").forEach((button) => {
     button.addEventListener("click", () => exportCsv(button.dataset.export));
+  });
+}
+
+function refreshCrudList(schemaId) {
+  const schema = schemas[schemaId];
+  const items = state[schema.collection];
+  const query = listFilters[schemaId] || "";
+  const filteredItems = filterItems(schemaId, items, query);
+  const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
+  const countElement = content.querySelector(`[data-list-count="${schemaId}"]`);
+  const tableContainer = content.querySelector(`[data-table-container="${schemaId}"]`);
+
+  if (countElement) {
+    countElement.textContent = `${totalLabel} ${schema.label}${filteredItems.length === 1 ? "" : "s"}`;
+  }
+  if (tableContainer) {
+    tableContainer.innerHTML = renderTable(schemaId, filteredItems, true, query);
+  }
+
+  content.querySelectorAll("[data-edit]").forEach((button) => {
+    button.addEventListener("click", () => editItem(button.dataset.edit));
+  });
+  content.querySelectorAll("[data-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteItem(button.dataset.delete));
   });
 }
 
@@ -696,6 +765,11 @@ function editItem(payload) {
 function deleteItem(payload) {
   const [schemaId, id] = payload.split(":");
   const schema = schemas[schemaId];
+  const item = state[schema.collection].find((record) => record.id === id);
+  const label = item?.name || item?.title || item?.description || schema.label;
+  const confirmed = window.confirm(`Excluir ${label}? Esta acao nao pode ser desfeita.`);
+  if (!confirmed) return;
+
   state[schema.collection] = state[schema.collection].filter((record) => record.id !== id);
   saveState();
   toast("Registro excluido.");
