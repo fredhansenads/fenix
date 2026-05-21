@@ -87,6 +87,20 @@ label {
   font-weight: 700;
 }
 
+.field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-label small {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .hidden {
   display: none !important;
 }
@@ -439,6 +453,15 @@ label {
 
 .form-grid .full {
   grid-column: 1 / -1;
+}
+
+.form-alert {
+  border: 1px solid #f3b7ad;
+  border-radius: 8px;
+  background: #fff0ed;
+  color: var(--danger);
+  padding: 12px 14px;
+  font-weight: 800;
 }
 
 .empty-state {

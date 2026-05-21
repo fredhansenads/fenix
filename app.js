@@ -380,6 +380,7 @@ const schemas = {
   clients: {
     label: "cliente",
     collection: "clients",
+    required: ["type", "name", "document", "email", "status"],
     fields: [
       ["type", "Tipo", "select", ["PJ", "PF"]],
       ["name", "Nome/Razao social", "text"],
@@ -394,6 +395,7 @@ const schemas = {
   suppliers: {
     label: "fornecedor",
     collection: "suppliers",
+    required: ["name", "document", "email", "category", "status"],
     fields: [
       ["name", "Nome/Razao social", "text"],
       ["document", "CPF/CNPJ", "text"],
@@ -407,6 +409,7 @@ const schemas = {
   proposals: {
     label: "proposta",
     collection: "proposals",
+    required: ["clientId", "title", "amount", "validUntil", "status", "responsibleId"],
     fields: [
       ["clientId", "Cliente", "relation", "clients"],
       ["title", "Titulo", "text"],
@@ -422,6 +425,7 @@ const schemas = {
   projects: {
     label: "projeto",
     collection: "projects",
+    required: ["clientId", "name", "responsibleId", "startDate", "dueDate", "status"],
     fields: [
       ["clientId", "Cliente", "relation", "clients"],
       ["name", "Nome do projeto", "text"],
@@ -436,6 +440,7 @@ const schemas = {
   tasks: {
     label: "tarefa",
     collection: "tasks",
+    required: ["projectId", "title", "responsibleId", "priority", "status", "dueDate"],
     fields: [
       ["projectId", "Projeto", "relation", "projects"],
       ["title", "Titulo", "text"],
@@ -450,6 +455,7 @@ const schemas = {
   users: {
     label: "usuario",
     collection: "users",
+    required: ["name", "email", "password", "role", "status"],
     fields: [
       ["name", "Nome", "text"],
       ["email", "E-mail", "email"],
@@ -462,6 +468,7 @@ const schemas = {
   payables: {
     label: "conta a pagar",
     collection: "payables",
+    required: ["supplierId", "category", "description", "amount", "dueDate", "status"],
     fields: [
       ["supplierId", "Fornecedor", "relation", "suppliers"],
       ["category", "Categoria", "text"],
@@ -477,6 +484,7 @@ const schemas = {
   receivables: {
     label: "conta a receber",
     collection: "receivables",
+    required: ["clientId", "category", "description", "amount", "dueDate", "status"],
     fields: [
       ["clientId", "Cliente", "relation", "clients"],
       ["category", "Categoria", "text"],
@@ -621,10 +629,17 @@ function renderForm(schemaId, item = {}, showCancel = false) {
   const schema = schemas[schemaId];
   const fields = schema.fields.map(([name, label, type, options, className]) => {
     const value = item[name] || "";
-    return `<label class="${className || ""}">${label}${renderInput(name, type, value, options)}</label>`;
+    const required = isRequiredField(schemaId, name);
+    return `
+      <label class="${className || ""}">
+        <span class="field-label">${label}${required ? '<small>Obrigatorio</small>' : ""}</span>
+        ${renderInput(name, type, value, options, required)}
+      </label>
+    `;
   }).join("");
   return `
-    <form class="form-grid" data-form="${schemaId}" data-id="${item.id || ""}">
+    <form class="form-grid" data-form="${schemaId}" data-id="${item.id || ""}" novalidate>
+      <div class="form-alert full hidden" data-form-alert></div>
       ${fields}
       <div class="full toolbar-actions">
         <button type="submit">${item.id ? "Salvar alteracoes" : "Cadastrar"}</button>
@@ -634,16 +649,22 @@ function renderForm(schemaId, item = {}, showCancel = false) {
   `;
 }
 
-function renderInput(name, type, value, options) {
-  if (type === "textarea") return `<textarea name="${name}">${escapeHtml(value)}</textarea>`;
+function renderInput(name, type, value, options, required = false) {
+  const requiredAttribute = required ? "required" : "";
+  if (type === "textarea") return `<textarea name="${name}" ${requiredAttribute}>${escapeHtml(value)}</textarea>`;
   if (type === "select") {
-    return `<select name="${name}">${options.map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${labelize(roleLabels[option] || option)}</option>`).join("")}</select>`;
+    return `<select name="${name}" ${requiredAttribute}>${options.map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${labelize(roleLabels[option] || option)}</option>`).join("")}</select>`;
   }
   if (type === "relation") {
     const collection = state[options] || [];
-    return `<select name="${name}">${collection.map((item) => `<option value="${item.id}" ${item.id === value ? "selected" : ""}>${item.name || item.title || item.email}</option>`).join("")}</select>`;
+    const emptyOption = collection.length ? "" : `<option value="">Nenhum registro disponivel</option>`;
+    return `<select name="${name}" ${requiredAttribute}>${emptyOption}${collection.map((item) => `<option value="${item.id}" ${item.id === value ? "selected" : ""}>${item.name || item.title || item.email}</option>`).join("")}</select>`;
   }
-  return `<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${["text", "email", "number", "date"].includes(type) ? "required" : ""} />`;
+  return `<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${requiredAttribute} />`;
+}
+
+function isRequiredField(schemaId, name) {
+  return schemas[schemaId]?.required?.includes(name) || false;
 }
 
 function bindCrud(schemaId) {
@@ -702,6 +723,13 @@ function saveForm(event, schemaId) {
   const formData = new FormData(form);
   const item = Object.fromEntries(formData.entries());
 
+  const invalidField = findInvalidField(schemaId, item);
+  if (invalidField) {
+    showFormError(form, `${columnLabel(invalidField)} e obrigatorio.`);
+    form.querySelector(`[name="${invalidField}"]`)?.focus();
+    return;
+  }
+
   schema.fields.forEach(([name, , type]) => {
     if (type === "number") item[name] = Number(item[name] || 0);
   });
@@ -712,16 +740,39 @@ function saveForm(event, schemaId) {
     const index = collection.findIndex((record) => record.id === form.dataset.id);
     collection[index] = { ...collection[index], ...item };
     savedItem = collection[index];
-    toast("Registro atualizado.");
+    toast(`${capitalize(schema.label)} atualizado com sucesso.`);
   } else {
     savedItem = { id: uid(), ...item };
     collection.push(savedItem);
-    toast("Registro cadastrado.");
+    toast(`${capitalize(schema.label)} cadastrado com sucesso.`);
   }
 
   applyBusinessRules(schema.collection, savedItem);
   saveState();
   renderCrud(schemaId);
+}
+
+function findInvalidField(schemaId, item) {
+  const schema = schemas[schemaId];
+  return (schema.required || []).find((field) => {
+    const value = item[field];
+    if (value === undefined || value === null || String(value).trim() === "") {
+      return true;
+    }
+    const type = schema.fields.find(([name]) => name === field)?.[2];
+    return type === "number" && Number(value) <= 0;
+  });
+}
+
+function showFormError(form, message) {
+  const alert = form.querySelector("[data-form-alert]");
+  if (!alert) return;
+  alert.textContent = message;
+  alert.classList.remove("hidden");
+}
+
+function capitalize(value) {
+  return String(value || "").charAt(0).toUpperCase() + String(value || "").slice(1);
 }
 
 function applyBusinessRules(collection, item) {
