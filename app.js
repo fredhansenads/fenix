@@ -77,10 +77,12 @@ const pageTitle = document.querySelector("#pageTitle");
 const pageKicker = document.querySelector("#pageKicker");
 const currentUser = document.querySelector("#currentUser");
 const sidebar = document.querySelector(".sidebar");
+const sidebarOverlay = document.querySelector("#sidebarOverlay");
 
 document.querySelector("#loginForm").addEventListener("submit", handleLogin);
 document.querySelector("#logoutButton").addEventListener("click", handleLogout);
-document.querySelector("#menuButton").addEventListener("click", () => sidebar.classList.toggle("open"));
+document.querySelector("#menuButton").addEventListener("click", () => setSidebarOpen(!sidebar.classList.contains("open")));
+sidebarOverlay.addEventListener("click", () => setSidebarOpen(false));
 
 async function boot() {
   state = await loadState();
@@ -256,10 +258,15 @@ function renderNavigation() {
     .join("");
   mainNav.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
-      sidebar.classList.remove("open");
+      setSidebarOpen(false);
       navigate(button.dataset.module);
     });
   });
+}
+
+function setSidebarOpen(open) {
+  sidebar.classList.toggle("open", open);
+  sidebarOverlay.classList.toggle("open", open);
 }
 
 function navigate(moduleId) {

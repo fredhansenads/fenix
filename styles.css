@@ -200,6 +200,21 @@ label {
   overflow-y: auto;
 }
 
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  border: 0;
+  border-radius: 0;
+  background: rgba(16, 35, 27, 0.42);
+  padding: 0;
+}
+
+.sidebar-overlay:hover {
+  background: rgba(16, 35, 27, 0.42);
+}
+
 .sidebar-brand {
   display: flex;
   align-items: center;
@@ -425,6 +440,21 @@ label {
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  scrollbar-color: var(--primary) #e7eee9;
+  scrollbar-width: thin;
+}
+
+.panel-body.table-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.panel-body.table-wrap::-webkit-scrollbar-track {
+  background: #e7eee9;
+}
+
+.panel-body.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 999px;
 }
 
 .data-table {
@@ -648,6 +678,10 @@ label {
     transform: translateX(0);
   }
 
+  .sidebar-overlay.open {
+    display: block;
+  }
+
   .icon-button {
     display: grid;
     place-items: center;
@@ -664,6 +698,26 @@ label {
 
   .content {
     padding: 16px;
+  }
+
+  .toolbar,
+  .panel-header {
+    align-items: stretch;
+  }
+
+  .toolbar-actions,
+  .finance-filters {
+    width: 100%;
+  }
+
+  .toolbar-actions > *,
+  .finance-filters > * {
+    flex: 1 1 180px;
+  }
+
+  .search-field input,
+  .filter-field select {
+    min-width: 0;
   }
 
   .kpi-grid,
