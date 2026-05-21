@@ -32,6 +32,7 @@ node server.js
 - Projetos
 - Tarefas
 - Relatorios com exportacao CSV
+- Notificacoes internas
 - Historico de atividades
 - Configuracoes administrativas
 
@@ -72,5 +73,12 @@ As rotas modulares ja aplicam validacao basica no servidor:
 - E-mails em formato valido para clientes, fornecedores e usuarios
 
 As acoes feitas pelas rotas modulares tambem geram auditoria inicial em `auditLogs`, com criacao, edicao, exclusao, usuario informado pelo frontend, modulo, registro e campos alterados.
+
+O modulo de notificacoes internas monitora automaticamente:
+
+- Contas a pagar vencidas ou proximas do vencimento
+- Contas a receber vencidas ou proximas do vencimento
+- Tarefas atrasadas ou proximas do prazo
+- Propostas vencidas ou proximas do vencimento
 
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

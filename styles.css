@@ -294,6 +294,35 @@ label {
   font-weight: 700;
 }
 
+.notification-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.notification-button span {
+  display: inline-grid;
+  min-width: 24px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.notification-button.has-alerts span {
+  background: #fff2cc;
+  color: #9a5b00;
+}
+
+.notification-button.has-critical span {
+  background: #fde2df;
+  color: #a32015;
+}
+
 .content {
   display: grid;
   gap: 22px;
@@ -613,6 +642,41 @@ label {
   width: 100%;
 }
 
+.notification-list {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.notification-item h4 {
+  margin: 8px 0 4px;
+  font-size: 1rem;
+}
+
+.notification-item p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.notification-warning {
+  border-left-color: #d98712;
+}
+
+.notification-danger {
+  border-left-color: var(--danger);
+}
+
 .chart-bars {
   display: grid;
   align-items: end;
@@ -696,6 +760,10 @@ label {
     display: none;
   }
 
+  .notification-button span {
+    display: inline-grid;
+  }
+
   .content {
     padding: 16px;
   }
@@ -726,6 +794,11 @@ label {
   .three-columns,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .notification-item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
 }

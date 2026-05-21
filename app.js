@@ -11,6 +11,7 @@ const modules = [
   { id: "projects", label: "Projetos", title: "Projetos", roles: ["admin", "gestor", "operacional", "comercial"] },
   { id: "tasks", label: "Tarefas", title: "Tarefas", roles: ["admin", "gestor", "operacional", "colaborador"] },
   { id: "reports", label: "Relatorios", title: "Relatorios", roles: ["admin", "gestor", "financeiro", "comercial"] },
+  { id: "notifications", label: "Notificacoes", title: "Notificacoes internas", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
   { id: "activity", label: "Historico", title: "Historico de atividades", roles: ["admin", "gestor"] },
   { id: "users", label: "Usuarios", title: "Usuarios e permissoes", roles: ["admin"] },
   { id: "settings", label: "Configuracoes", title: "Configuracoes administrativas", roles: ["admin"] }
@@ -81,11 +82,14 @@ const pageKicker = document.querySelector("#pageKicker");
 const currentUser = document.querySelector("#currentUser");
 const sidebar = document.querySelector(".sidebar");
 const sidebarOverlay = document.querySelector("#sidebarOverlay");
+const notificationButton = document.querySelector("#notificationButton");
+const notificationCount = document.querySelector("#notificationCount");
 
 document.querySelector("#loginForm").addEventListener("submit", handleLogin);
 document.querySelector("#logoutButton").addEventListener("click", handleLogout);
 document.querySelector("#menuButton").addEventListener("click", () => setSidebarOpen(!sidebar.classList.contains("open")));
 sidebarOverlay.addEventListener("click", () => setSidebarOpen(false));
+notificationButton.addEventListener("click", () => navigate("notifications"));
 
 async function boot() {
   state = await loadState();
@@ -328,6 +332,7 @@ function renderNavigation() {
       navigate(button.dataset.module);
     });
   });
+  updateNotificationSummary();
 }
 
 function setSidebarOpen(open) {
@@ -356,12 +361,14 @@ function navigate(moduleId) {
     projects: () => renderCrud("projects"),
     tasks: () => renderCrud("tasks"),
     reports: renderReports,
+    notifications: renderNotifications,
     activity: renderActivity,
     users: () => renderCrud("users"),
     settings: renderSettings
   };
   try {
     renderers[module.id]();
+    updateNotificationSummary();
   } catch (error) {
     content.innerHTML = `
       <section class="card">
@@ -382,6 +389,13 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function addDays(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function statusClass(status) {
   if (["ativo", "aprovada", "recebido", "pago", "concluida", "concluido"].includes(status)) return "success";
   if (["pendente", "enviada", "em_andamento", "prospect", "rascunho"].includes(status)) return "warning";
@@ -391,6 +405,14 @@ function statusClass(status) {
 
 function labelize(value) {
   return String(value || "-").replaceAll("_", " ");
+}
+
+function updateNotificationSummary() {
+  const notifications = buildNotifications();
+  const critical = notifications.filter((item) => item.tone === "danger").length;
+  notificationCount.textContent = notifications.length;
+  notificationButton.classList.toggle("has-alerts", notifications.length > 0);
+  notificationButton.classList.toggle("has-critical", critical > 0);
 }
 
 function renderDashboard() {
@@ -553,6 +575,113 @@ function renderUpcomingFinancials(items) {
       `).join("")}
     </div>
   `;
+}
+
+function buildNotifications() {
+  const todayValue = today();
+  const warningLimit = addDays(7);
+  const notifications = [];
+
+  state.payables
+    .filter((item) => item.status === "pendente" && item.dueDate)
+    .forEach((item) => {
+      if (item.dueDate < todayValue) {
+        notifications.push({
+          tone: "danger",
+          area: "Financeiro",
+          title: "Conta a pagar vencida",
+          detail: `${item.description} venceu em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`,
+          date: item.dueDate,
+          target: "finance"
+        });
+      } else if (item.dueDate <= warningLimit) {
+        notifications.push({
+          tone: "warning",
+          area: "Financeiro",
+          title: "Conta a pagar proxima do vencimento",
+          detail: `${item.description} vence em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`,
+          date: item.dueDate,
+          target: "finance"
+        });
+      }
+    });
+
+  state.receivables
+    .filter((item) => item.status === "pendente" && item.dueDate)
+    .forEach((item) => {
+      if (item.dueDate < todayValue) {
+        notifications.push({
+          tone: "danger",
+          area: "Financeiro",
+          title: "Conta a receber vencida",
+          detail: `${item.description} venceu em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`,
+          date: item.dueDate,
+          target: "finance"
+        });
+      } else if (item.dueDate <= warningLimit) {
+        notifications.push({
+          tone: "warning",
+          area: "Financeiro",
+          title: "Recebimento proximo do vencimento",
+          detail: `${item.description} vence em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`,
+          date: item.dueDate,
+          target: "finance"
+        });
+      }
+    });
+
+  state.tasks
+    .filter((item) => !["concluida", "cancelada"].includes(item.status) && item.dueDate)
+    .forEach((item) => {
+      if (item.dueDate < todayValue) {
+        notifications.push({
+          tone: "danger",
+          area: "Operacional",
+          title: "Tarefa atrasada",
+          detail: `${item.title} venceu em ${formatDate(item.dueDate)}.`,
+          date: item.dueDate,
+          target: "tasks"
+        });
+      } else if (item.dueDate <= warningLimit) {
+        notifications.push({
+          tone: "warning",
+          area: "Operacional",
+          title: "Tarefa proxima do prazo",
+          detail: `${item.title} vence em ${formatDate(item.dueDate)}.`,
+          date: item.dueDate,
+          target: "tasks"
+        });
+      }
+    });
+
+  state.proposals
+    .filter((item) => ["rascunho", "enviada"].includes(item.status) && item.validUntil)
+    .forEach((item) => {
+      if (item.validUntil < todayValue) {
+        notifications.push({
+          tone: "danger",
+          area: "Comercial",
+          title: "Proposta vencida",
+          detail: `${item.title} venceu em ${formatDate(item.validUntil)}.`,
+          date: item.validUntil,
+          target: "proposals"
+        });
+      } else if (item.validUntil <= warningLimit) {
+        notifications.push({
+          tone: "warning",
+          area: "Comercial",
+          title: "Proposta perto do vencimento",
+          detail: `${item.title} vence em ${formatDate(item.validUntil)}.`,
+          date: item.validUntil,
+          target: "proposals"
+        });
+      }
+    });
+
+  return notifications.sort((a, b) => {
+    const toneOrder = { danger: 0, warning: 1, neutral: 2 };
+    return (toneOrder[a.tone] ?? 9) - (toneOrder[b.tone] ?? 9) || String(a.date).localeCompare(String(b.date));
+  });
 }
 
 function formatDate(value) {
@@ -1286,6 +1415,61 @@ function renderReportInsights(reports) {
         <article class="info-item">
           <span class="status neutral">${report.title}</span>
           <p>${report.summary}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderNotifications() {
+  const notifications = buildNotifications();
+  const critical = notifications.filter((item) => item.tone === "danger").length;
+  const warnings = notifications.filter((item) => item.tone === "warning").length;
+
+  content.innerHTML = `
+    <section class="grid kpi-grid">
+      ${kpi("Alertas ativos", notifications.length, notifications.length ? "warning" : "success")}
+      ${kpi("Criticos", critical, critical ? "danger" : "success")}
+      ${kpi("Atencao", warnings, warnings ? "warning" : "success")}
+      ${kpi("Janela monitorada", "7 dias", "neutral")}
+    </section>
+    <section class="toolbar">
+      <div>
+        <p class="eyebrow">Monitoramento</p>
+        <h3>Alertas financeiros, comerciais e operacionais</h3>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" class="secondary" data-goto="finance">Financeiro</button>
+        <button type="button" class="secondary" data-goto="proposals">Propostas</button>
+        <button type="button" class="secondary" data-goto="tasks">Tarefas</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <h3>Notificacoes internas</h3>
+        <span class="status ${critical ? "danger" : notifications.length ? "warning" : "success"}">${notifications.length || "ok"}</span>
+      </div>
+      <div class="panel-body">${renderNotificationList(notifications)}</div>
+    </section>
+  `;
+  bindGoToButtons();
+}
+
+function renderNotificationList(notifications) {
+  if (!notifications.length) {
+    return `<div class="empty-state compact">Nenhum alerta interno no momento.</div>`;
+  }
+
+  return `
+    <div class="notification-list">
+      ${notifications.map((notification) => `
+        <article class="notification-item notification-${notification.tone}">
+          <div>
+            <span class="status ${notification.tone}">${notification.area}</span>
+            <h4>${notification.title}</h4>
+            <p>${notification.detail}</p>
+          </div>
+          <button type="button" class="secondary" data-goto="${notification.target}">Abrir</button>
         </article>
       `).join("")}
     </div>
