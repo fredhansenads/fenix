@@ -303,8 +303,17 @@ label {
   min-width: min(280px, 100%);
 }
 
-.search-field input {
+.filter-field {
+  min-width: 170px;
+}
+
+.search-field input,
+.filter-field select {
   min-width: 240px;
+}
+
+.filter-field select {
+  min-width: 170px;
 }
 
 .grid {
@@ -375,6 +384,7 @@ label {
 }
 
 .panel-body.table-wrap {
+  max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
@@ -394,9 +404,17 @@ label {
 }
 
 .data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
   color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
+}
+
+.data-table tbody tr:hover {
+  background: #f8faf8;
 }
 
 .data-table td:last-child {

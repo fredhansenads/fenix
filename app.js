@@ -67,6 +67,7 @@ const initialData = {
 let state = structuredClone(initialData);
 let activeModule = "dashboard";
 const listFilters = {};
+const statusFilters = {};
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -503,8 +504,10 @@ function renderCrud(schemaId) {
   const schema = schemas[schemaId];
   const items = state[schema.collection];
   const query = listFilters[schemaId] || "";
-  const filteredItems = filterItems(schemaId, items, query);
+  const status = statusFilters[schemaId] || "";
+  const filteredItems = filterItems(schemaId, items, query, status);
   const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
+  const statusOptions = getStatusOptions(schemaId);
   content.innerHTML = `
     <section class="toolbar">
       <div>
@@ -516,25 +519,40 @@ function renderCrud(schemaId) {
           Buscar
           <input type="search" data-search="${schemaId}" value="${escapeHtml(query)}" placeholder="Digite para filtrar" />
         </label>
+        ${statusOptions.length ? `
+          <label class="filter-field">
+            Status
+            <select data-status-filter="${schemaId}">
+              <option value="">Todos</option>
+              ${statusOptions.map((option) => `<option value="${option}" ${option === status ? "selected" : ""}>${labelize(option)}</option>`).join("")}
+            </select>
+          </label>
+        ` : ""}
         <button type="button" data-new="${schemaId}">Novo ${schema.label}</button>
         <button type="button" class="secondary" data-export="${schema.collection}">Exportar CSV</button>
       </div>
     </section>
     <section class="panel">
       <div class="panel-header"><h3>Lista</h3></div>
-      <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, filteredItems, true, query)}</div>
+      <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, filteredItems, true, query, status)}</div>
     </section>
   `;
   bindCrud(schemaId);
 }
 
-function filterItems(schemaId, items, query) {
+function getStatusOptions(schemaId) {
+  const statusField = schemas[schemaId].fields.find(([name]) => name === "status");
+  return Array.isArray(statusField?.[3]) ? statusField[3] : [];
+}
+
+function filterItems(schemaId, items, query, status = "") {
   const normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) return items;
 
   const schema = schemas[schemaId];
   return items.filter((item) => {
-    return schema.columns.some((column) => normalizeText(formatCellText(column, item[column])).includes(normalizedQuery));
+    const matchesStatus = !status || item.status === status;
+    const matchesQuery = !normalizedQuery || schema.columns.some((column) => normalizeText(formatCellText(column, item[column])).includes(normalizedQuery));
+    return matchesStatus && matchesQuery;
   });
 }
 
@@ -559,10 +577,10 @@ function renderCrudForm(schemaId, item = {}) {
   bindCrud(schemaId);
 }
 
-function renderTable(schemaId, items, actions = true, query = "") {
+function renderTable(schemaId, items, actions = true, query = "", status = "") {
   const schema = schemas[schemaId];
   if (!items.length) {
-    const message = query ? "Nenhum registro encontrado para esta busca." : `Nenhum ${schema.label} cadastrado ainda.`;
+    const message = query || status ? "Nenhum registro encontrado para os filtros atuais." : `Nenhum ${schema.label} cadastrado ainda.`;
     return `<div class="empty-state">${message}</div>`;
   }
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
@@ -675,6 +693,12 @@ function bindCrud(schemaId) {
       refreshCrudList(input.dataset.search);
     });
   });
+  content.querySelectorAll("[data-status-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      statusFilters[select.dataset.statusFilter] = select.value;
+      refreshCrudList(select.dataset.statusFilter);
+    });
+  });
   content.querySelectorAll("[data-new]").forEach((button) => {
     button.addEventListener("click", () => renderCrudForm(button.dataset.new));
   });
@@ -688,7 +712,7 @@ function bindCrud(schemaId) {
     button.addEventListener("click", () => renderCrud(button.dataset.cancelEdit));
   });
   content.querySelectorAll("[data-export]").forEach((button) => {
-    button.addEventListener("click", () => exportCsv(button.dataset.export));
+    button.addEventListener("click", () => exportCsv(button.dataset.export, schemaId));
   });
 }
 
@@ -696,7 +720,8 @@ function refreshCrudList(schemaId) {
   const schema = schemas[schemaId];
   const items = state[schema.collection];
   const query = listFilters[schemaId] || "";
-  const filteredItems = filterItems(schemaId, items, query);
+  const status = statusFilters[schemaId] || "";
+  const filteredItems = filterItems(schemaId, items, query, status);
   const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
   const countElement = content.querySelector(`[data-list-count="${schemaId}"]`);
   const tableContainer = content.querySelector(`[data-table-container="${schemaId}"]`);
@@ -705,7 +730,7 @@ function refreshCrudList(schemaId) {
     countElement.textContent = `${totalLabel} ${schema.label}${filteredItems.length === 1 ? "" : "s"}`;
   }
   if (tableContainer) {
-    tableContainer.innerHTML = renderTable(schemaId, filteredItems, true, query);
+    tableContainer.innerHTML = renderTable(schemaId, filteredItems, true, query, status);
   }
 
   content.querySelectorAll("[data-edit]").forEach((button) => {
@@ -952,8 +977,12 @@ function bindGoToButtons() {
   content.querySelectorAll("[data-goto]").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.goto)));
 }
 
-function exportCsv(collection) {
-  const rows = state[collection];
+function exportCsv(collection, schemaId = "") {
+  const schema = Object.values(schemas).find((item) => item.collection === collection);
+  const activeSchemaId = schemaId || Object.keys(schemas).find((key) => schemas[key].collection === collection);
+  const rows = activeSchemaId
+    ? filterItems(activeSchemaId, state[collection], listFilters[activeSchemaId] || "", statusFilters[activeSchemaId] || "")
+    : state[collection];
   if (!rows?.length) {
     toast("Nao ha dados para exportar.");
     return;
