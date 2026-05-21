@@ -36,4 +36,9 @@ node server.js
 
 ## Observacao tecnica
 
-Esta primeira versao usa `localStorage` para persistencia local no navegador. A proxima etapa recomendada e migrar a base para uma arquitetura full-stack com backend, banco PostgreSQL, autenticacao segura e regras de permissao no servidor.
+Esta versao usa uma persistencia hibrida:
+
+- Com `node server.js`, os dados sao salvos pela API local em `data/fenix-db.json`.
+- Sem o servidor local, o sistema continua funcionando com `localStorage` no navegador.
+
+A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

@@ -1,4 +1,5 @@
 const STORE_KEY = "santus_erp_mvp";
+const API_STATE_URL = "/api/state";
 
 const modules = [
   { id: "dashboard", label: "Dashboard", title: "Visao geral", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
@@ -63,7 +64,7 @@ const initialData = {
   ]
 };
 
-let state = loadState();
+let state = structuredClone(initialData);
 let activeModule = "dashboard";
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -79,7 +80,8 @@ document.querySelector("#loginForm").addEventListener("submit", handleLogin);
 document.querySelector("#logoutButton").addEventListener("click", handleLogout);
 document.querySelector("#menuButton").addEventListener("click", () => sidebar.classList.toggle("open"));
 
-function boot() {
+async function boot() {
+  state = await loadState();
   hydrateReferences();
   if (state.session) {
     showApp();
@@ -88,7 +90,13 @@ function boot() {
   }
 }
 
-function loadState() {
+async function loadState() {
+  const apiState = await loadStateFromApi();
+  if (apiState) {
+    localStorage.setItem(STORE_KEY, JSON.stringify(apiState));
+    return normalizeState(apiState);
+  }
+
   const saved = localStorage.getItem(STORE_KEY);
   if (!saved) {
     const seeded = structuredClone(initialData);
@@ -120,6 +128,39 @@ function normalizeState(savedState) {
 
 function saveState() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  saveStateToApi(state);
+}
+
+async function loadStateFromApi() {
+  if (!location.protocol.startsWith("http")) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(API_STATE_URL, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function saveStateToApi(nextState) {
+  if (!location.protocol.startsWith("http")) {
+    return;
+  }
+
+  try {
+    await fetch(API_STATE_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextState)
+    });
+  } catch {
+    // The localStorage fallback keeps the MVP usable without the local server.
+  }
 }
 
 function hydrateReferences() {
