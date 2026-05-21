@@ -1055,43 +1055,158 @@ function bindFinance() {
 }
 
 function renderReports() {
-  const reports = [
-    ["Financeiro mensal", state.receivables.length + state.payables.length, money(sum(state.receivables, "amount") - sum(state.payables, "amount"))],
-    ["Propostas por status", state.proposals.length, `${state.proposals.filter((item) => item.status === "aprovada").length} aprovadas`],
-    ["Projetos e tarefas", state.projects.length, `${state.tasks.filter((item) => item.status !== "concluida").length} tarefas abertas`],
-    ["Carteira de clientes", state.clients.length, `${state.clients.filter((item) => item.status === "ativo").length} ativos`]
-  ];
+  const financial = buildFinancialReport();
+  const commercial = buildCommercialReport();
+  const operational = buildOperationalReport();
+  const registry = buildRegistryReport();
+  const reports = [financial, commercial, operational, registry];
 
   content.innerHTML = `
     <section class="toolbar">
       <div>
         <p class="eyebrow">Analise</p>
-        <h3>Relatorios exportaveis</h3>
+        <h3>Relatorios executivos</h3>
       </div>
       <div class="toolbar-actions">
         <button type="button" data-export="receivables">Exportar receitas</button>
         <button type="button" class="secondary" data-export="payables">Exportar despesas</button>
+        <button type="button" class="secondary" data-export="proposals">Exportar propostas</button>
+        <button type="button" class="secondary" data-export="tasks">Exportar tarefas</button>
       </div>
     </section>
-    <section class="grid three-columns">
-      ${reports.map(([title, count, summary]) => `<article class="card kpi-card"><span>${title}</span><strong>${count}</strong><p>${summary}</p></article>`).join("")}
+    <section class="grid four-columns">
+      ${reports.map((report) => `<article class="card kpi-card ${report.tone}"><span>${report.title}</span><strong>${report.value}</strong><p>${report.summary}</p></article>`).join("")}
     </section>
     <section class="panel">
       <div class="panel-header"><h3>Indicadores comerciais, financeiros e operacionais</h3></div>
       <div class="panel-body table-wrap">
         <table class="data-table">
-          <thead><tr><th>Indicador</th><th>Valor</th><th>Leitura</th></tr></thead>
+          <thead><tr><th>Area</th><th>Indicador</th><th>Valor</th><th>Leitura</th></tr></thead>
           <tbody>
-            <tr><td>Receita total cadastrada</td><td>${money(sum(state.receivables, "amount"))}</td><td>Base de entradas realizadas e previstas</td></tr>
-            <tr><td>Despesa total cadastrada</td><td>${money(sum(state.payables, "amount"))}</td><td>Base de saidas realizadas e previstas</td></tr>
-            <tr><td>Taxa de conversao</td><td>${state.proposals.length ? Math.round((state.proposals.filter((item) => item.status === "aprovada").length / state.proposals.length) * 100) : 0}%</td><td>Propostas aprovadas sobre total</td></tr>
-            <tr><td>Produtividade</td><td>${state.tasks.filter((item) => item.status === "concluida").length}/${state.tasks.length}</td><td>Tarefas concluidas sobre total</td></tr>
+            ${renderReportRows(financial.rows)}
+            ${renderReportRows(commercial.rows)}
+            ${renderReportRows(operational.rows)}
+            ${renderReportRows(registry.rows)}
           </tbody>
         </table>
       </div>
     </section>
+    <section class="grid two-columns">
+      <div class="panel">
+        <div class="panel-header"><h3>Leitura rapida</h3></div>
+        <div class="panel-body">${renderReportInsights(reports)}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Exportacoes disponiveis</h3></div>
+        <div class="panel-body quick-actions">
+          <button type="button" data-export="clients">Clientes</button>
+          <button type="button" data-export="suppliers">Fornecedores</button>
+          <button type="button" data-export="projects">Projetos</button>
+          <button type="button" data-export="tasks">Tarefas</button>
+        </div>
+      </div>
+    </section>
   `;
   content.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", () => exportCsv(button.dataset.export)));
+}
+
+function buildFinancialReport() {
+  const revenue = sum(state.receivables, "amount");
+  const expenses = sum(state.payables, "amount");
+  const received = sum(state.receivables.filter((item) => item.status === "recebido"), "amount");
+  const paid = sum(state.payables.filter((item) => item.status === "pago"), "amount");
+  const overdue = state.payables.filter((item) => item.status === "pendente" && item.dueDate < today()).length;
+
+  return {
+    title: "Financeiro",
+    value: money(received - paid),
+    summary: `${money(revenue)} em receitas cadastradas`,
+    tone: received - paid >= 0 ? "kpi-success" : "kpi-danger",
+    rows: [
+      ["Financeiro", "Receita total cadastrada", money(revenue), "Soma de contas a receber"],
+      ["Financeiro", "Despesa total cadastrada", money(expenses), "Soma de contas a pagar"],
+      ["Financeiro", "Resultado realizado", money(received - paid), "Recebido menos pago"],
+      ["Financeiro", "Contas a pagar vencidas", overdue, "Pendencias financeiras em atraso"]
+    ]
+  };
+}
+
+function buildCommercialReport() {
+  const approved = state.proposals.filter((item) => item.status === "aprovada").length;
+  const sent = state.proposals.filter((item) => item.status === "enviada").length;
+  const total = state.proposals.length;
+  const conversion = total ? Math.round((approved / total) * 100) : 0;
+  const ticket = approved ? sum(state.proposals.filter((item) => item.status === "aprovada"), "amount") / approved : 0;
+
+  return {
+    title: "Comercial",
+    value: `${conversion}%`,
+    summary: `${approved} aprovada${approved === 1 ? "" : "s"} e ${sent} enviada${sent === 1 ? "" : "s"}`,
+    tone: conversion >= 50 ? "kpi-success" : "kpi-warning",
+    rows: [
+      ["Comercial", "Propostas cadastradas", total, "Volume total de propostas"],
+      ["Comercial", "Propostas enviadas", sent, "Propostas em negociacao"],
+      ["Comercial", "Propostas aprovadas", approved, "Propostas convertidas"],
+      ["Comercial", "Ticket medio aprovado", money(ticket), "Valor medio das propostas aprovadas"]
+    ]
+  };
+}
+
+function buildOperationalReport() {
+  const openProjects = state.projects.filter((item) => item.status === "em_andamento").length;
+  const openTasks = state.tasks.filter((item) => !["concluida", "cancelada"].includes(item.status)).length;
+  const completedTasks = state.tasks.filter((item) => item.status === "concluida").length;
+  const productivity = state.tasks.length ? Math.round((completedTasks / state.tasks.length) * 100) : 0;
+
+  return {
+    title: "Operacional",
+    value: `${productivity}%`,
+    summary: `${openProjects} projeto${openProjects === 1 ? "" : "s"} em andamento`,
+    tone: productivity >= 50 ? "kpi-success" : "kpi-warning",
+    rows: [
+      ["Operacional", "Projetos em andamento", openProjects, "Projetos ativos na operacao"],
+      ["Operacional", "Tarefas abertas", openTasks, "Trabalho pendente ou em andamento"],
+      ["Operacional", "Tarefas concluidas", completedTasks, "Entregas finalizadas"],
+      ["Operacional", "Produtividade por tarefa", `${productivity}%`, "Tarefas concluidas sobre total"]
+    ]
+  };
+}
+
+function buildRegistryReport() {
+  const activeClients = state.clients.filter((item) => item.status === "ativo").length;
+  const prospects = state.clients.filter((item) => item.status === "prospect").length;
+  const activeSuppliers = state.suppliers.filter((item) => item.status === "ativo").length;
+  const activeUsers = state.users.filter((item) => item.status === "ativo").length;
+
+  return {
+    title: "Cadastros",
+    value: activeClients,
+    summary: `${prospects} prospect${prospects === 1 ? "" : "s"} em carteira`,
+    tone: "kpi-neutral",
+    rows: [
+      ["Cadastros", "Clientes ativos", activeClients, "Clientes prontos para propostas e projetos"],
+      ["Cadastros", "Prospects", prospects, "Oportunidades em acompanhamento"],
+      ["Cadastros", "Fornecedores ativos", activeSuppliers, "Base de fornecedores disponivel"],
+      ["Cadastros", "Usuarios ativos", activeUsers, "Pessoas com acesso ao sistema"]
+    ]
+  };
+}
+
+function renderReportRows(rows) {
+  return rows.map(([area, indicator, value, reading]) => `<tr><td>${area}</td><td>${indicator}</td><td>${value}</td><td>${reading}</td></tr>`).join("");
+}
+
+function renderReportInsights(reports) {
+  return `
+    <div class="info-list">
+      ${reports.map((report) => `
+        <article class="info-item">
+          <span class="status neutral">${report.title}</span>
+          <p>${report.summary}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderSettings() {
