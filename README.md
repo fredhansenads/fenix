@@ -58,4 +58,12 @@ E tambem expoe rotas por modulo para preparar a migracao futura:
 
 O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `projects` e `tasks`.
 
+As rotas modulares ja aplicam validacao basica no servidor:
+
+- Campos obrigatorios por modulo
+- Status permitidos por tipo de registro
+- Valores financeiros maiores que zero
+- Datas no formato `AAAA-MM-DD`
+- E-mails em formato valido para clientes, fornecedores e usuarios
+
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

@@ -28,6 +28,77 @@ const collections = new Set([
   "tasks"
 ]);
 
+const validationRules = {
+  users: {
+    required: ["name", "email", "password", "role", "status"],
+    allowed: {
+      role: ["admin", "gestor", "financeiro", "comercial", "operacional", "colaborador", "visualizador"],
+      status: ["ativo", "inativo"]
+    },
+    email: ["email"]
+  },
+  clients: {
+    required: ["type", "name", "document", "email", "status"],
+    allowed: {
+      type: ["PJ", "PF"],
+      status: ["ativo", "prospect", "inativo"]
+    },
+    email: ["email"]
+  },
+  suppliers: {
+    required: ["name", "document", "email", "category", "status"],
+    allowed: {
+      status: ["ativo", "inativo"]
+    },
+    email: ["email"]
+  },
+  categories: {
+    required: ["name", "type"],
+    allowed: {
+      type: ["receita", "despesa"]
+    }
+  },
+  payables: {
+    required: ["supplierId", "category", "description", "amount", "dueDate", "status"],
+    allowed: {
+      status: ["pendente", "pago", "cancelado"]
+    },
+    positiveNumbers: ["amount"],
+    dates: ["dueDate", "paymentDate"]
+  },
+  receivables: {
+    required: ["clientId", "category", "description", "amount", "dueDate", "status"],
+    allowed: {
+      status: ["pendente", "recebido", "cancelado"]
+    },
+    positiveNumbers: ["amount"],
+    dates: ["dueDate", "receivedDate"]
+  },
+  proposals: {
+    required: ["clientId", "title", "amount", "validUntil", "status", "responsibleId"],
+    allowed: {
+      status: ["rascunho", "enviada", "aprovada", "recusada", "expirada", "cancelada"]
+    },
+    positiveNumbers: ["amount"],
+    dates: ["validUntil", "sentAt", "approvedAt"]
+  },
+  projects: {
+    required: ["clientId", "name", "responsibleId", "startDate", "dueDate", "status"],
+    allowed: {
+      status: ["planejado", "em_andamento", "pausado", "concluido", "cancelado"]
+    },
+    dates: ["startDate", "dueDate"]
+  },
+  tasks: {
+    required: ["projectId", "title", "responsibleId", "priority", "status", "dueDate"],
+    allowed: {
+      priority: ["baixa", "media", "alta", "urgente"],
+      status: ["pendente", "em_andamento", "concluida", "cancelada"]
+    },
+    dates: ["dueDate", "completedAt"]
+  }
+};
+
 function sendJson(response, status, payload) {
   response.writeHead(status, {
     "Content-Type": "application/json;charset=utf-8",
@@ -95,7 +166,12 @@ async function handleCollectionApi(request, response, collection, id) {
   if (request.method === "POST") {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    const item = { id: payload.id || createId(), ...payload };
+    const item = normalizeRecord(collection, { ...payload, id: payload.id || createId() });
+    const validation = validateRecord(collection, item);
+    if (!validation.valid) {
+      sendJson(response, 400, validation);
+      return;
+    }
     data[collection].push(item);
     await writeDatabase(data);
     sendJson(response, 201, item);
@@ -110,7 +186,13 @@ async function handleCollectionApi(request, response, collection, id) {
       sendJson(response, 404, { error: "Record not found" });
       return;
     }
-    data[collection][index] = { ...data[collection][index], ...payload, id };
+    const item = normalizeRecord(collection, { ...data[collection][index], ...payload, id });
+    const validation = validateRecord(collection, item);
+    if (!validation.valid) {
+      sendJson(response, 400, validation);
+      return;
+    }
+    data[collection][index] = item;
     await writeDatabase(data);
     sendJson(response, 200, data[collection][index]);
     return;
@@ -131,9 +213,82 @@ async function handleCollectionApi(request, response, collection, id) {
   sendJson(response, 405, { error: "Method not allowed" });
 }
 
+function normalizeRecord(collection, record) {
+  const rules = validationRules[collection] || {};
+  const normalized = {};
+  Object.entries(record || {}).forEach(([key, value]) => {
+    normalized[key] = typeof value === "string" ? value.trim() : value;
+  });
+  (rules.positiveNumbers || []).forEach((field) => {
+    if (!isBlank(normalized[field])) {
+      normalized[field] = Number(normalized[field]);
+    }
+  });
+  return normalized;
+}
+
+function validateRecord(collection, record) {
+  const fields = {};
+  const rules = validationRules[collection];
+
+  if (!rules) {
+    return { valid: true };
+  }
+
+  if (!record || Array.isArray(record) || typeof record !== "object") {
+    return { valid: false, error: "Invalid record", fields: { record: "Registro invalido." } };
+  }
+
+  (rules.required || []).forEach((field) => {
+    if (isBlank(record[field])) {
+      fields[field] = "Campo obrigatorio.";
+    }
+  });
+
+  Object.entries(rules.allowed || {}).forEach(([field, options]) => {
+    if (!isBlank(record[field]) && !options.includes(record[field])) {
+      fields[field] = "Valor nao permitido.";
+    }
+  });
+
+  (rules.positiveNumbers || []).forEach((field) => {
+    if (!isBlank(record[field]) && (!Number.isFinite(Number(record[field])) || Number(record[field]) <= 0)) {
+      fields[field] = "Informe um valor maior que zero.";
+    }
+  });
+
+  (rules.email || []).forEach((field) => {
+    if (!isBlank(record[field]) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(record[field])) {
+      fields[field] = "Informe um e-mail valido.";
+    }
+  });
+
+  (rules.dates || []).forEach((field) => {
+    if (!isBlank(record[field]) && !isIsoDate(record[field])) {
+      fields[field] = "Informe uma data valida no formato AAAA-MM-DD.";
+    }
+  });
+
+  return Object.keys(fields).length
+    ? { valid: false, error: "Validation failed", fields }
+    : { valid: true };
+}
+
+function isBlank(value) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 async function readDatabase() {
   try {
-    const content = await fsp.readFile(databaseFile, "utf-8");
+    const content = (await fsp.readFile(databaseFile, "utf-8")).replace(/^\uFEFF/, "");
     return { exists: true, data: JSON.parse(content) };
   } catch (error) {
     if (error.code === "ENOENT") {
