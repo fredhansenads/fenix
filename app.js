@@ -1,5 +1,6 @@
 const STORE_KEY = "santus_erp_mvp";
 const API_STATE_URL = "/api/state";
+const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "projects", "tasks"]);
 
 const modules = [
   { id: "dashboard", label: "Dashboard", title: "Visao geral", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
@@ -165,6 +166,51 @@ async function saveStateToApi(nextState) {
   } catch {
     // The localStorage fallback keeps the MVP usable without the local server.
   }
+}
+
+async function apiRequest(path, options = {}) {
+  if (!location.protocol.startsWith("http")) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.status === 204 ? {} : response.json();
+  } catch {
+    return null;
+  }
+}
+
+function collectionApiPath(collection, id = "") {
+  return `/api/${collection}${id ? `/${id}` : ""}`;
+}
+
+async function saveRecordToApi(collection, item, isEditing) {
+  if (!API_COLLECTIONS.has(collection)) {
+    return null;
+  }
+
+  return apiRequest(collectionApiPath(collection, isEditing ? item.id : ""), {
+    method: isEditing ? "PUT" : "POST",
+    body: JSON.stringify(item)
+  });
+}
+
+async function deleteRecordFromApi(collection, id) {
+  if (!API_COLLECTIONS.has(collection)) {
+    return null;
+  }
+
+  return apiRequest(collectionApiPath(collection, id), { method: "DELETE" });
 }
 
 function hydrateReferences() {
@@ -858,7 +904,7 @@ function refreshCrudList(schemaId) {
   });
 }
 
-function saveForm(event, schemaId) {
+async function saveForm(event, schemaId) {
   event.preventDefault();
   const schema = schemas[schemaId];
   const form = event.currentTarget;
@@ -877,8 +923,9 @@ function saveForm(event, schemaId) {
   });
 
   const collection = state[schema.collection];
+  const isEditing = Boolean(form.dataset.id);
   let savedItem;
-  if (form.dataset.id) {
+  if (isEditing) {
     const index = collection.findIndex((record) => record.id === form.dataset.id);
     collection[index] = { ...collection[index], ...item };
     savedItem = collection[index];
@@ -889,7 +936,11 @@ function saveForm(event, schemaId) {
     toast(`${capitalize(schema.label)} cadastrado com sucesso.`);
   }
 
-  applyBusinessRules(schema.collection, savedItem);
+  const generatedRecords = applyBusinessRules(schema.collection, savedItem);
+  await saveRecordToApi(schema.collection, savedItem, isEditing);
+  for (const generatedRecord of generatedRecords) {
+    await saveRecordToApi("receivables", generatedRecord, false);
+  }
   saveState();
   renderCrud(schemaId);
 }
@@ -921,7 +972,7 @@ function applyBusinessRules(collection, item) {
   if (collection === "proposals" && item.status === "aprovada") {
     const exists = state.receivables.some((receivable) => receivable.proposalId === item.id);
     if (!exists && item.amount) {
-      state.receivables.push({
+      const receivable = {
         id: uid(),
         clientId: item.clientId,
         proposalId: item.id,
@@ -932,9 +983,12 @@ function applyBusinessRules(collection, item) {
         receivedDate: "",
         status: "pendente",
         paymentMethod: ""
-      });
+      };
+      state.receivables.push(receivable);
+      return [receivable];
     }
   }
+  return [];
 }
 
 function editItem(payload) {
@@ -955,7 +1009,7 @@ function editItem(payload) {
   bindCrud(schemaId);
 }
 
-function deleteItem(payload) {
+async function deleteItem(payload) {
   const [schemaId, id] = payload.split(":");
   const schema = schemas[schemaId];
   const item = state[schema.collection].find((record) => record.id === id);
@@ -964,6 +1018,7 @@ function deleteItem(payload) {
   if (!confirmed) return;
 
   state[schema.collection] = state[schema.collection].filter((record) => record.id !== id);
+  await deleteRecordFromApi(schema.collection, id);
   saveState();
   toast("Registro excluido.");
   renderCrud(schemaId);
