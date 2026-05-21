@@ -353,6 +353,7 @@ label {
 .kpi-card {
   display: grid;
   gap: 8px;
+  border-left: 4px solid var(--line);
 }
 
 .kpi-card span {
@@ -363,6 +364,22 @@ label {
 
 .kpi-card strong {
   font-size: 1.55rem;
+}
+
+.kpi-success {
+  border-left-color: var(--success);
+}
+
+.kpi-warning {
+  border-left-color: var(--warning);
+}
+
+.kpi-danger {
+  border-left-color: var(--danger);
+}
+
+.kpi-neutral {
+  border-left-color: var(--primary);
 }
 
 .panel-header {
@@ -486,6 +503,63 @@ label {
   padding: 34px;
   color: var(--muted);
   text-align: center;
+}
+
+.empty-state.compact {
+  padding: 18px;
+}
+
+.info-list {
+  display: grid;
+  gap: 12px;
+}
+
+.info-item {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.info-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.info-item p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.info-item.split {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-item.split span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-top: 3px;
+}
+
+.positive {
+  color: var(--success);
+}
+
+.negative {
+  color: var(--danger);
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quick-actions button {
+  width: 100%;
 }
 
 .chart-bars {

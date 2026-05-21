@@ -324,21 +324,56 @@ function renderDashboard() {
   const paid = sum(state.payables.filter((item) => item.status === "pago"), "amount");
   const pendingReceivable = sum(state.receivables.filter((item) => item.status === "pendente"), "amount");
   const pendingPayable = sum(state.payables.filter((item) => item.status === "pendente"), "amount");
-  const overdueReceivable = state.receivables.filter((item) => item.status === "pendente" && item.dueDate < today()).length;
-  const overduePayable = state.payables.filter((item) => item.status === "pendente" && item.dueDate < today()).length;
+  const overdueReceivables = state.receivables.filter((item) => item.status === "pendente" && item.dueDate < today());
+  const overduePayables = state.payables.filter((item) => item.status === "pendente" && item.dueDate < today());
+  const overdueReceivable = overdueReceivables.length;
+  const overduePayable = overduePayables.length;
   const approvedProposals = state.proposals.filter((item) => item.status === "aprovada").length;
   const conversion = state.proposals.length ? Math.round((approvedProposals / state.proposals.length) * 100) : 0;
+  const result = received - paid;
+  const projectedBalance = pendingReceivable - pendingPayable;
+  const openTasks = state.tasks.filter((item) => !["concluida", "cancelada"].includes(item.status));
+  const lateTasks = openTasks.filter((item) => item.dueDate && item.dueDate < today());
+  const upcomingFinancials = getUpcomingFinancials();
+  const alerts = buildDashboardAlerts({
+    overdueReceivable,
+    overduePayable,
+    lateTasks: lateTasks.length,
+    projectedBalance,
+    pendingReceivable,
+    pendingPayable
+  });
 
   content.innerHTML = `
     <section class="grid kpi-grid">
-      ${kpi("Receita realizada", money(received))}
-      ${kpi("Despesas pagas", money(paid))}
-      ${kpi("Resultado", money(received - paid))}
-      ${kpi("Saldo previsto", money(pendingReceivable - pendingPayable))}
-      ${kpi("Contas vencidas", `${overdueReceivable + overduePayable}`)}
-      ${kpi("Taxa de conversao", `${conversion}%`)}
-      ${kpi("Clientes ativos", state.clients.filter((item) => item.status === "ativo").length)}
-      ${kpi("Projetos em andamento", state.projects.filter((item) => item.status === "em_andamento").length)}
+      ${kpi("Resultado realizado", money(result), result >= 0 ? "success" : "danger")}
+      ${kpi("Saldo previsto", money(projectedBalance), projectedBalance >= 0 ? "success" : "warning")}
+      ${kpi("Contas vencidas", `${overdueReceivable + overduePayable}`, overdueReceivable + overduePayable ? "danger" : "success")}
+      ${kpi("Conversao comercial", `${conversion}%`, conversion >= 50 ? "success" : "warning")}
+      ${kpi("A receber", money(pendingReceivable), "neutral")}
+      ${kpi("A pagar", money(pendingPayable), pendingPayable ? "warning" : "success")}
+      ${kpi("Clientes ativos", state.clients.filter((item) => item.status === "ativo").length, "neutral")}
+      ${kpi("Tarefas abertas", openTasks.length, lateTasks.length ? "danger" : "neutral")}
+    </section>
+
+    <section class="grid three-columns">
+      <div class="panel">
+        <div class="panel-header"><h3>Alertas executivos</h3><span class="status ${alerts.length ? "warning" : "success"}">${alerts.length || "ok"}</span></div>
+        <div class="panel-body">${renderAlerts(alerts)}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Proximos vencimentos</h3><button type="button" data-goto="finance" class="secondary">Financeiro</button></div>
+        <div class="panel-body">${renderUpcomingFinancials(upcomingFinancials)}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Atalhos</h3><span class="status neutral">acao rapida</span></div>
+        <div class="panel-body quick-actions">
+          <button type="button" data-goto="clients">Clientes</button>
+          <button type="button" data-goto="proposals">Propostas</button>
+          <button type="button" data-goto="projects">Projetos</button>
+          <button type="button" data-goto="tasks">Tarefas</button>
+        </div>
+      </div>
     </section>
 
     <section class="grid two-columns">
@@ -357,15 +392,15 @@ function renderDashboard() {
       </div>
       <div class="panel">
         <div class="panel-header"><h3>Prioridades operacionais</h3><button type="button" data-goto="tasks" class="secondary">Ver tarefas</button></div>
-        <div class="panel-body table-wrap">${renderTable("tasks", state.tasks.slice(0, 5), false)}</div>
+        <div class="panel-body table-wrap">${renderTable("tasks", openTasks.slice(0, 5), false)}</div>
       </div>
     </section>
   `;
   bindGoToButtons();
 }
 
-function kpi(label, value) {
-  return `<article class="card kpi-card"><span>${label}</span><strong>${value}</strong></article>`;
+function kpi(label, value, tone = "neutral") {
+  return `<article class="card kpi-card kpi-${tone}"><span>${label}</span><strong>${value}</strong></article>`;
 }
 
 function bar(label, value, max) {
@@ -375,6 +410,81 @@ function bar(label, value, max) {
 
 function sum(items, key) {
   return items.reduce((total, item) => total + Number(item[key] || 0), 0);
+}
+
+function getUpcomingFinancials() {
+  const payables = state.payables
+    .filter((item) => item.status === "pendente")
+    .map((item) => ({ ...item, type: "A pagar", direction: "saida", date: item.dueDate }));
+  const receivables = state.receivables
+    .filter((item) => item.status === "pendente")
+    .map((item) => ({ ...item, type: "A receber", direction: "entrada", date: item.dueDate }));
+
+  return [...payables, ...receivables]
+    .filter((item) => item.date)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
+}
+
+function buildDashboardAlerts(metrics) {
+  const alerts = [];
+
+  if (metrics.overduePayable) {
+    alerts.push({ tone: "danger", title: "Contas a pagar vencidas", detail: `${metrics.overduePayable} pendencia${metrics.overduePayable === 1 ? "" : "s"} exigem atencao.` });
+  }
+  if (metrics.overdueReceivable) {
+    alerts.push({ tone: "warning", title: "Recebimentos vencidos", detail: `${metrics.overdueReceivable} entrada${metrics.overdueReceivable === 1 ? "" : "s"} ainda nao recebida${metrics.overdueReceivable === 1 ? "" : "s"}.` });
+  }
+  if (metrics.lateTasks) {
+    alerts.push({ tone: "danger", title: "Tarefas atrasadas", detail: `${metrics.lateTasks} tarefa${metrics.lateTasks === 1 ? "" : "s"} fora do prazo.` });
+  }
+  if (metrics.projectedBalance < 0) {
+    alerts.push({ tone: "danger", title: "Saldo previsto negativo", detail: `Previsao atual de ${money(metrics.projectedBalance)}.` });
+  }
+  if (!alerts.length) {
+    alerts.push({ tone: "success", title: "Operacao sob controle", detail: "Nenhum alerta critico no momento." });
+  }
+
+  return alerts;
+}
+
+function renderAlerts(alerts) {
+  return `
+    <div class="info-list">
+      ${alerts.map((alert) => `
+        <article class="info-item">
+          <span class="status ${alert.tone}">${alert.title}</span>
+          <p>${alert.detail}</p>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderUpcomingFinancials(items) {
+  if (!items.length) {
+    return `<div class="empty-state compact">Nenhum vencimento pendente.</div>`;
+  }
+
+  return `
+    <div class="info-list">
+      ${items.map((item) => `
+        <article class="info-item split">
+          <div>
+            <strong>${item.description}</strong>
+            <span>${item.type} · ${formatDate(item.date)}</span>
+          </div>
+          <strong class="${item.direction === "entrada" ? "positive" : "negative"}">${money(item.amount)}</strong>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 const schemas = {
