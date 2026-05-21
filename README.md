@@ -41,4 +41,21 @@ Esta versao usa uma persistencia hibrida:
 - Com `node server.js`, os dados sao salvos pela API local em `data/fenix-db.json`.
 - Sem o servidor local, o sistema continua funcionando com `localStorage` no navegador.
 
+## API local
+
+O servidor mantem compatibilidade com o estado completo em:
+
+- `GET /api/state`
+- `PUT /api/state`
+
+E tambem expoe rotas por modulo para preparar a migracao futura:
+
+- `GET /api/clients`
+- `POST /api/clients`
+- `GET /api/clients/:id`
+- `PUT /api/clients/:id`
+- `DELETE /api/clients/:id`
+
+O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `projects` e `tasks`.
+
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.
