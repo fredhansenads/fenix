@@ -967,13 +967,19 @@ function renderFinance() {
   const paid = sum(state.payables.filter((item) => item.status === "pago"), "amount");
   const pendingReceivable = sum(state.receivables.filter((item) => item.status === "pendente"), "amount");
   const pendingPayable = sum(state.payables.filter((item) => item.status === "pendente"), "amount");
+  const overduePayable = state.payables.filter((item) => item.status === "pendente" && item.dueDate < today());
+  const overdueReceivable = state.receivables.filter((item) => item.status === "pendente" && item.dueDate < today());
 
   content.innerHTML = `
     <section class="grid kpi-grid">
-      ${kpi("Entradas realizadas", money(received))}
-      ${kpi("Saidas realizadas", money(paid))}
-      ${kpi("Entradas previstas", money(pendingReceivable))}
-      ${kpi("Saidas previstas", money(pendingPayable))}
+      ${kpi("Entradas realizadas", money(received), "success")}
+      ${kpi("Saidas realizadas", money(paid), paid ? "warning" : "neutral")}
+      ${kpi("Entradas previstas", money(pendingReceivable), "neutral")}
+      ${kpi("Saidas previstas", money(pendingPayable), "warning")}
+      ${kpi("A receber vencido", money(sum(overdueReceivable, "amount")), overdueReceivable.length ? "danger" : "success")}
+      ${kpi("A pagar vencido", money(sum(overduePayable, "amount")), overduePayable.length ? "danger" : "success")}
+      ${kpi("Saldo realizado", money(received - paid), received - paid >= 0 ? "success" : "danger")}
+      ${kpi("Saldo previsto", money(pendingReceivable - pendingPayable), pendingReceivable - pendingPayable >= 0 ? "success" : "warning")}
     </section>
     <section class="grid two-columns">
       ${financePanel("payables", "Contas a pagar")}
@@ -984,13 +990,37 @@ function renderFinance() {
 }
 
 function financePanel(schemaId, title) {
+  const schema = schemas[schemaId];
+  const items = state[schema.collection];
+  const query = listFilters[schemaId] || "";
+  const status = statusFilters[schemaId] || "";
+  const filteredItems = filterItems(schemaId, items, query, status);
+  const statusOptions = getStatusOptions(schemaId);
+  const total = sum(filteredItems, "amount");
+
   return `
     <div class="panel">
       <div class="panel-header">
-        <h3>${title}</h3>
+        <div>
+          <h3>${title}</h3>
+          <span class="panel-subtitle">${filteredItems.length} registro${filteredItems.length === 1 ? "" : "s"} · ${money(total)}</span>
+        </div>
         <button type="button" data-new-finance="${schemaId}">Novo</button>
       </div>
-      <div class="panel-body table-wrap">${renderTable(schemaId, state[schemas[schemaId].collection], true)}</div>
+      <div class="finance-filters">
+        <label class="search-field">
+          Buscar
+          <input type="search" data-finance-search="${schemaId}" value="${escapeHtml(query)}" placeholder="Filtrar lancamentos" />
+        </label>
+        <label class="filter-field">
+          Status
+          <select data-finance-status="${schemaId}">
+            <option value="">Todos</option>
+            ${statusOptions.map((option) => `<option value="${option}" ${option === status ? "selected" : ""}>${labelize(option)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="panel-body table-wrap">${renderTable(schemaId, filteredItems, true, query, status)}</div>
     </div>
   `;
 }
@@ -1006,6 +1036,18 @@ function bindFinance() {
         </section>
       `;
       bindCrud(schemaId);
+    });
+  });
+  content.querySelectorAll("[data-finance-search]").forEach((input) => {
+    input.addEventListener("input", () => {
+      listFilters[input.dataset.financeSearch] = input.value;
+      renderFinance();
+    });
+  });
+  content.querySelectorAll("[data-finance-status]").forEach((select) => {
+    select.addEventListener("change", () => {
+      statusFilters[select.dataset.financeStatus] = select.value;
+      renderFinance();
     });
   });
   content.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => editItem(button.dataset.edit)));
