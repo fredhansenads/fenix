@@ -88,4 +88,6 @@ Os relatorios executivos exportam:
 - Relatorio consolidado com indicadores, vencimentos e notificacoes
 - Visoes separadas por area e listas operacionais em CSV
 
+As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros, datas formatadas, destaque visual para atrasos e vencimentos proximos, foco acessivel em campos e botoes, e selecao explicita em campos relacionados.
+
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

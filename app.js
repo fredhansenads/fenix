@@ -846,11 +846,21 @@ function renderCrud(schemaId) {
       </div>
     </section>
     <section class="panel">
-      <div class="panel-header"><h3>Lista</h3></div>
+      <div class="panel-header">
+        <h3>Lista</h3>
+        <div class="panel-actions" data-list-actions="${schemaId}">${renderListActions(schemaId, totalLabel, query, status)}</div>
+      </div>
       <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, filteredItems, true, query, status)}</div>
     </section>
   `;
   bindCrud(schemaId);
+}
+
+function renderListActions(schemaId, totalLabel, query, status) {
+  return `
+    ${(query || status) ? `<button type="button" class="secondary" data-clear-filters="${schemaId}">Limpar filtros</button>` : ""}
+    <span class="status neutral">${totalLabel}</span>
+  `;
 }
 
 function getStatusOptions(schemaId) {
@@ -893,16 +903,52 @@ function renderCrudForm(schemaId, item = {}) {
 function renderTable(schemaId, items, actions = true, query = "", status = "") {
   const schema = schemas[schemaId];
   if (!items.length) {
-    const message = query || status ? "Nenhum registro encontrado para os filtros atuais." : `Nenhum ${schema.label} cadastrado ainda.`;
-    return `<div class="empty-state">${message}</div>`;
+    return renderEmptyState(schemaId, actions, query, status);
   }
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
   const rows = items.map((item) => {
     const cells = schema.columns.map((column) => `<td>${formatCell(column, item[column])}</td>`).join("");
     const actionCell = actions ? `<td><div class="table-actions"><button class="secondary" type="button" data-edit="${schemaId}:${item.id}">Editar</button><button class="danger" type="button" data-delete="${schemaId}:${item.id}">Excluir</button></div></td>` : "";
-    return `<tr>${cells}${actionCell}</tr>`;
+    return `<tr class="${rowToneClass(schemaId, item)}">${cells}${actionCell}</tr>`;
   }).join("");
   return `<table class="data-table"><thead><tr>${headings}${actions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderEmptyState(schemaId, actions, query, status) {
+  const schema = schemas[schemaId];
+  const hasFilters = Boolean(query || status);
+  return `
+    <div class="empty-state">
+      <h3>${hasFilters ? "Nenhum resultado encontrado" : `Nenhum ${schema.label} cadastrado ainda`}</h3>
+      <p>${hasFilters ? "Ajuste a busca ou limpe os filtros para ver todos os registros." : "Comece criando o primeiro registro deste modulo."}</p>
+      ${actions ? `
+        <div class="empty-actions">
+          ${hasFilters ? `<button type="button" class="secondary" data-clear-filters="${schemaId}">Limpar filtros</button>` : ""}
+          <button type="button" data-new="${schemaId}">Novo ${schema.label}</button>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function rowToneClass(schemaId, item) {
+  const todayValue = today();
+  const warningLimit = addDays(7);
+  const date = item.dueDate || item.validUntil;
+
+  if (["payables", "receivables"].includes(schemaId) && item.status === "pendente" && date) {
+    if (date < todayValue) return "row-danger";
+    if (date <= warningLimit) return "row-warning";
+  }
+  if (schemaId === "tasks" && !["concluida", "cancelada"].includes(item.status) && item.dueDate) {
+    if (item.dueDate < todayValue) return "row-danger";
+    if (item.dueDate <= warningLimit) return "row-warning";
+  }
+  if (schemaId === "proposals" && ["rascunho", "enviada"].includes(item.status) && item.validUntil) {
+    if (item.validUntil < todayValue) return "row-danger";
+    if (item.validUntil <= warningLimit) return "row-warning";
+  }
+  return "";
 }
 
 function columnLabel(column) {
@@ -920,6 +966,7 @@ function columnLabel(column) {
     responsibleId: "Responsavel",
     amount: "Valor",
     validUntil: "Validade",
+    startDate: "Inicio",
     dueDate: "Prazo",
     priority: "Prioridade",
     role: "Perfil",
@@ -930,6 +977,7 @@ function columnLabel(column) {
 
 function formatCell(column, value) {
   if (["amount"].includes(column)) return money(value);
+  if (["validUntil", "dueDate", "startDate", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
   if (["status", "priority", "role"].includes(column)) return `<span class="status ${statusClass(value)}">${labelize(roleLabels[value] || value)}</span>`;
   if (column === "clientId") return state.clients.find((item) => item.id === value)?.name || "-";
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "-";
@@ -940,6 +988,7 @@ function formatCell(column, value) {
 
 function formatCellText(column, value) {
   if (["amount"].includes(column)) return money(value);
+  if (["validUntil", "dueDate", "startDate", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
   if (["status", "priority", "role"].includes(column)) return roleLabels[value] || labelize(value);
   if (column === "clientId") return state.clients.find((item) => item.id === value)?.name || "";
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "";
@@ -988,7 +1037,7 @@ function renderInput(name, type, value, options, required = false) {
   }
   if (type === "relation") {
     const collection = state[options] || [];
-    const emptyOption = collection.length ? "" : `<option value="">Nenhum registro disponivel</option>`;
+    const emptyOption = collection.length ? `<option value="">Selecione...</option>` : `<option value="">Nenhum registro disponivel</option>`;
     return `<select name="${name}" ${requiredAttribute}>${emptyOption}${collection.map((item) => `<option value="${item.id}" ${item.id === value ? "selected" : ""}>${item.name || item.title || item.email}</option>`).join("")}</select>`;
   }
   return `<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${requiredAttribute} />`;
@@ -1010,6 +1059,13 @@ function bindCrud(schemaId) {
     select.addEventListener("change", () => {
       statusFilters[select.dataset.statusFilter] = select.value;
       refreshCrudList(select.dataset.statusFilter);
+    });
+  });
+  content.querySelectorAll("[data-clear-filters]").forEach((button) => {
+    button.addEventListener("click", () => {
+      listFilters[button.dataset.clearFilters] = "";
+      statusFilters[button.dataset.clearFilters] = "";
+      renderCrud(button.dataset.clearFilters);
     });
   });
   content.querySelectorAll("[data-new]").forEach((button) => {
@@ -1037,10 +1093,14 @@ function refreshCrudList(schemaId) {
   const filteredItems = filterItems(schemaId, items, query, status);
   const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
   const countElement = content.querySelector(`[data-list-count="${schemaId}"]`);
+  const actionsElement = content.querySelector(`[data-list-actions="${schemaId}"]`);
   const tableContainer = content.querySelector(`[data-table-container="${schemaId}"]`);
 
   if (countElement) {
     countElement.textContent = `${totalLabel} ${schema.label}${filteredItems.length === 1 ? "" : "s"}`;
+  }
+  if (actionsElement) {
+    actionsElement.innerHTML = renderListActions(schemaId, totalLabel, query, status);
   }
   if (tableContainer) {
     tableContainer.innerHTML = renderTable(schemaId, filteredItems, true, query, status);
@@ -1051,6 +1111,13 @@ function refreshCrudList(schemaId) {
   });
   content.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteItem(button.dataset.delete));
+  });
+  content.querySelectorAll("[data-clear-filters]").forEach((button) => {
+    button.addEventListener("click", () => {
+      listFilters[button.dataset.clearFilters] = "";
+      statusFilters[button.dataset.clearFilters] = "";
+      renderCrud(button.dataset.clearFilters);
+    });
   });
 }
 
@@ -1260,6 +1327,25 @@ function bindFinance() {
     select.addEventListener("change", () => {
       statusFilters[select.dataset.financeStatus] = select.value;
       renderFinance();
+    });
+  });
+  content.querySelectorAll("[data-clear-filters]").forEach((button) => {
+    button.addEventListener("click", () => {
+      listFilters[button.dataset.clearFilters] = "";
+      statusFilters[button.dataset.clearFilters] = "";
+      renderFinance();
+    });
+  });
+  content.querySelectorAll("[data-new]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const schemaId = button.dataset.new;
+      content.innerHTML = `
+        <section class="panel">
+          <div class="panel-header"><h3>Novo ${schemas[schemaId].label}</h3></div>
+          <div class="panel-body">${renderForm(schemaId)}</div>
+        </section>
+      `;
+      bindCrud(schemaId);
     });
   });
   content.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => editItem(button.dataset.edit)));
