@@ -96,6 +96,8 @@ O modulo de notificacoes internas monitora automaticamente:
 - Propostas vencidas ou proximas do vencimento
 - Contratos vencidos ou proximos do vencimento
 
+As notificacoes podem ser filtradas entre nao lidas e todas, marcadas individualmente como lidas ou marcadas em lote. O contador do topo considera apenas notificacoes ainda nao lidas.
+
 Os relatorios executivos exportam:
 
 - Resumo executivo

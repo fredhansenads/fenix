@@ -45,6 +45,7 @@ const actionPermissions = {
 const initialData = {
   session: null,
   auditLogs: [],
+  notificationReads: [],
   users: [
     { id: uid(), name: "Administrador SANTUS", email: "admin@santus.com", password: "santus123", role: "admin", status: "ativo" },
     { id: uid(), name: "Gestor Comercial", email: "comercial@santus.com", password: "santus123", role: "comercial", status: "ativo" }
@@ -91,6 +92,7 @@ let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
 const activityFilters = { query: "", action: "", collection: "" };
+const notificationFilters = { status: "unread" };
 const reportFilters = { from: "", to: "" };
 let lastApiError = null;
 let handlingUnauthorized = false;
@@ -163,7 +165,8 @@ function normalizeState(savedState) {
     "contracts",
     "projects",
     "tasks",
-    "auditLogs"
+    "auditLogs",
+    "notificationReads"
   ].forEach((collection) => {
     if (!Array.isArray(normalized[collection])) {
       normalized[collection] = [];
@@ -606,10 +609,10 @@ function labelize(value) {
 
 function updateNotificationSummary() {
   const notifications = buildNotifications();
-  const critical = notifications.filter((item) => item.tone === "danger").length;
-  notificationCount.textContent = notifications.length;
-  notificationButton.classList.toggle("has-alerts", notifications.length > 0);
-  notificationButton.classList.toggle("has-critical", critical > 0);
+  const unread = getUnreadNotifications(notifications);
+  notificationCount.textContent = unread.length;
+  notificationButton.classList.toggle("has-alerts", unread.length > 0);
+  notificationButton.classList.toggle("has-critical", unread.some((item) => item.tone === "danger"));
 }
 
 function renderDashboard() {
@@ -784,6 +787,7 @@ function buildNotifications() {
     .forEach((item) => {
       if (item.dueDate < todayValue) {
         notifications.push({
+          id: notificationId("payables", item.id, "overdue", item.dueDate),
           tone: "danger",
           area: "Financeiro",
           title: "Conta a pagar vencida",
@@ -793,6 +797,7 @@ function buildNotifications() {
         });
       } else if (item.dueDate <= warningLimit) {
         notifications.push({
+          id: notificationId("payables", item.id, "upcoming", item.dueDate),
           tone: "warning",
           area: "Financeiro",
           title: "Conta a pagar proxima do vencimento",
@@ -808,6 +813,7 @@ function buildNotifications() {
     .forEach((item) => {
       if (item.dueDate < todayValue) {
         notifications.push({
+          id: notificationId("receivables", item.id, "overdue", item.dueDate),
           tone: "danger",
           area: "Financeiro",
           title: "Conta a receber vencida",
@@ -817,6 +823,7 @@ function buildNotifications() {
         });
       } else if (item.dueDate <= warningLimit) {
         notifications.push({
+          id: notificationId("receivables", item.id, "upcoming", item.dueDate),
           tone: "warning",
           area: "Financeiro",
           title: "Recebimento proximo do vencimento",
@@ -832,6 +839,7 @@ function buildNotifications() {
     .forEach((item) => {
       if (item.dueDate < todayValue) {
         notifications.push({
+          id: notificationId("tasks", item.id, "overdue", item.dueDate),
           tone: "danger",
           area: "Operacional",
           title: "Tarefa atrasada",
@@ -841,6 +849,7 @@ function buildNotifications() {
         });
       } else if (item.dueDate <= warningLimit) {
         notifications.push({
+          id: notificationId("tasks", item.id, "upcoming", item.dueDate),
           tone: "warning",
           area: "Operacional",
           title: "Tarefa proxima do prazo",
@@ -856,6 +865,7 @@ function buildNotifications() {
     .forEach((item) => {
       if (item.validUntil < todayValue) {
         notifications.push({
+          id: notificationId("proposals", item.id, "expired", item.validUntil),
           tone: "danger",
           area: "Comercial",
           title: "Proposta vencida",
@@ -865,6 +875,7 @@ function buildNotifications() {
         });
       } else if (item.validUntil <= warningLimit) {
         notifications.push({
+          id: notificationId("proposals", item.id, "upcoming", item.validUntil),
           tone: "warning",
           area: "Comercial",
           title: "Proposta perto do vencimento",
@@ -880,6 +891,7 @@ function buildNotifications() {
     .forEach((item) => {
       if (item.endDate < todayValue) {
         notifications.push({
+          id: notificationId("contracts", item.id, "expired", item.endDate),
           tone: "danger",
           area: "Contratos",
           title: "Contrato vencido",
@@ -889,6 +901,7 @@ function buildNotifications() {
         });
       } else if (item.endDate <= warningLimit) {
         notifications.push({
+          id: notificationId("contracts", item.id, "upcoming", item.endDate),
           tone: "warning",
           area: "Contratos",
           title: "Contrato perto do vencimento",
@@ -903,6 +916,18 @@ function buildNotifications() {
     const toneOrder = { danger: 0, warning: 1, neutral: 2 };
     return (toneOrder[a.tone] ?? 9) - (toneOrder[b.tone] ?? 9) || String(a.date).localeCompare(String(b.date));
   });
+}
+
+function notificationId(collection, id, type, date) {
+  return [collection, id || "registro", type, date || "sem-data"].join(":");
+}
+
+function isNotificationRead(notification) {
+  return state.notificationReads.includes(notification.id);
+}
+
+function getUnreadNotifications(notifications = buildNotifications()) {
+  return notifications.filter((notification) => !isNotificationRead(notification));
 }
 
 function formatDate(value) {
@@ -1994,15 +2019,18 @@ function renderReportInsights(reports) {
 
 function renderNotifications() {
   const notifications = buildNotifications();
-  const critical = notifications.filter((item) => item.tone === "danger").length;
-  const warnings = notifications.filter((item) => item.tone === "warning").length;
+  const unread = getUnreadNotifications(notifications);
+  const visibleNotifications = notificationFilters.status === "all" ? notifications : unread;
+  const readCount = notifications.length - unread.length;
+  const critical = unread.filter((item) => item.tone === "danger").length;
+  const warnings = unread.filter((item) => item.tone === "warning").length;
 
   content.innerHTML = `
     <section class="grid kpi-grid">
-      ${kpi("Alertas ativos", notifications.length, notifications.length ? "warning" : "success")}
+      ${kpi("Nao lidas", unread.length, unread.length ? "warning" : "success")}
       ${kpi("Criticos", critical, critical ? "danger" : "success")}
       ${kpi("Atencao", warnings, warnings ? "warning" : "success")}
-      ${kpi("Janela monitorada", "7 dias", "neutral")}
+      ${kpi("Lidas", readCount, readCount ? "neutral" : "success")}
     </section>
     <section class="toolbar">
       <div>
@@ -2010,6 +2038,9 @@ function renderNotifications() {
         <h3>Alertas financeiros, comerciais e operacionais</h3>
       </div>
       <div class="toolbar-actions">
+        <button type="button" class="${notificationFilters.status === "unread" ? "" : "secondary"}" data-notification-filter="unread">Nao lidas</button>
+        <button type="button" class="${notificationFilters.status === "all" ? "" : "secondary"}" data-notification-filter="all">Todas</button>
+        <button type="button" class="secondary" data-mark-all-notifications ${unread.length ? "" : "disabled"}>Marcar todas como lidas</button>
         <button type="button" class="secondary" data-goto="finance">Financeiro</button>
         <button type="button" class="secondary" data-goto="proposals">Propostas</button>
         <button type="button" class="secondary" data-goto="tasks">Tarefas</button>
@@ -2018,33 +2049,68 @@ function renderNotifications() {
     <section class="panel">
       <div class="panel-header">
         <h3>Notificacoes internas</h3>
-        <span class="status ${critical ? "danger" : notifications.length ? "warning" : "success"}">${notifications.length || "ok"}</span>
+        <span class="status ${critical ? "danger" : unread.length ? "warning" : "success"}">${visibleNotifications.length || "ok"}</span>
       </div>
-      <div class="panel-body">${renderNotificationList(notifications)}</div>
+      <div class="panel-body">${renderNotificationList(visibleNotifications)}</div>
     </section>
   `;
   bindGoToButtons();
+  bindNotificationActions();
 }
 
 function renderNotificationList(notifications) {
   if (!notifications.length) {
-    return `<div class="empty-state compact">Nenhum alerta interno no momento.</div>`;
+    return `<div class="empty-state compact">Nenhuma notificacao para exibir.</div>`;
   }
 
   return `
     <div class="notification-list">
       ${notifications.map((notification) => `
-        <article class="notification-item notification-${notification.tone}">
+        <article class="notification-item notification-${notification.tone} ${isNotificationRead(notification) ? "is-read" : ""}">
           <div>
             <span class="status ${notification.tone}">${notification.area}</span>
             <h4>${notification.title}</h4>
             <p>${notification.detail}</p>
           </div>
-          <button type="button" class="secondary" data-goto="${notification.target}">Abrir</button>
+          <div class="toolbar-actions">
+            ${isNotificationRead(notification) ? '<span class="status neutral">lida</span>' : `<button type="button" class="secondary" data-mark-notification="${notification.id}">Marcar como lida</button>`}
+            <button type="button" class="secondary" data-goto="${notification.target}">Abrir</button>
+          </div>
         </article>
       `).join("")}
     </div>
   `;
+}
+
+function bindNotificationActions() {
+  content.querySelectorAll("[data-notification-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      notificationFilters.status = button.dataset.notificationFilter;
+      renderNotifications();
+    });
+  });
+  content.querySelectorAll("[data-mark-notification]").forEach((button) => {
+    button.addEventListener("click", () => markNotificationRead(button.dataset.markNotification));
+  });
+  content.querySelector("[data-mark-all-notifications]")?.addEventListener("click", () => {
+    getUnreadNotifications().forEach((notification) => markNotificationRead(notification.id, false));
+    saveState();
+    updateNotificationSummary();
+    renderNotifications();
+    toast("Notificacoes marcadas como lidas.");
+  });
+}
+
+function markNotificationRead(id, shouldRender = true) {
+  if (!id || state.notificationReads.includes(id)) return;
+  state.notificationReads.push(id);
+  state.notificationReads = state.notificationReads.slice(-500);
+  if (shouldRender) {
+    saveState();
+    updateNotificationSummary();
+    renderNotifications();
+    toast("Notificacao marcada como lida.");
+  }
 }
 
 function renderActivity() {

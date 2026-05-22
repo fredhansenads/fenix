@@ -723,6 +723,10 @@ label {
   color: var(--muted);
 }
 
+.notification-item.is-read {
+  opacity: 0.72;
+}
+
 .notification-warning {
   border-left-color: #d98712;
 }
