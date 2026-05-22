@@ -115,4 +115,6 @@ As permissoes por acao controlam quem pode criar, editar e excluir registros por
 
 Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados. Quando um token invalido ou expirado e enviado, a API retorna `401 Unauthorized`.
 
+O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API.
+
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo.

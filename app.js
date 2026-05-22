@@ -91,6 +91,7 @@ let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
 const activityFilters = { query: "", action: "", collection: "" };
+let lastApiError = null;
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -231,6 +232,7 @@ async function saveStateToApi(nextState) {
 }
 
 async function apiRequest(path, options = {}) {
+  lastApiError = null;
   if (!location.protocol.startsWith("http")) {
     return null;
   }
@@ -251,13 +253,39 @@ async function apiRequest(path, options = {}) {
         ...(options.headers || {})
       }
     });
+    const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
     if (!response.ok) {
+      lastApiError = {
+        status: response.status,
+        payload
+      };
       return null;
     }
-    return response.status === 204 ? {} : response.json();
+    return payload;
   } catch {
     return null;
   }
+}
+
+function apiErrorMessage(fallback = "Nao foi possivel concluir a acao na API.") {
+  if (!lastApiError) {
+    return fallback;
+  }
+
+  if (lastApiError.status === 401) {
+    return "Sessao expirada ou invalida. Entre novamente para continuar.";
+  }
+
+  if (lastApiError.status === 403) {
+    return lastApiError.payload?.message || "Seu perfil nao possui permissao para esta acao.";
+  }
+
+  const fieldMessages = Object.values(lastApiError.payload?.fields || {}).filter(Boolean);
+  if (fieldMessages.length) {
+    return fieldMessages[0];
+  }
+
+  return lastApiError.payload?.message || lastApiError.payload?.error || fallback;
 }
 
 function collectionApiPath(collection, id = "") {
@@ -1359,24 +1387,38 @@ async function saveForm(event, schemaId) {
   });
 
   const collection = state[schema.collection];
+  const previousCollection = collection.map((record) => ({ ...record }));
+  const previousReceivables = state.receivables.map((record) => ({ ...record }));
   let savedItem;
   if (isEditing) {
     const index = collection.findIndex((record) => record.id === form.dataset.id);
     collection[index] = { ...collection[index], ...item };
     savedItem = collection[index];
-    toast(`${capitalize(schema.label)} atualizado com sucesso.`);
   } else {
     savedItem = { id: uid(), ...item };
     collection.push(savedItem);
-    toast(`${capitalize(schema.label)} cadastrado com sucesso.`);
   }
 
   const generatedRecords = applyBusinessRules(schema.collection, savedItem);
   await saveRecordToApi(schema.collection, savedItem, isEditing);
+  if (lastApiError) {
+    state[schema.collection] = previousCollection;
+    state.receivables = previousReceivables;
+    showFormError(form, apiErrorMessage(`Nao foi possivel salvar ${schema.label}.`));
+    return;
+  }
+
   for (const generatedRecord of generatedRecords) {
     await saveRecordToApi("receivables", generatedRecord, false);
+    if (lastApiError) {
+      state[schema.collection] = previousCollection;
+      state.receivables = previousReceivables;
+      showFormError(form, apiErrorMessage("Registro salvo, mas nao foi possivel gerar o recebimento automatico."));
+      return;
+    }
   }
   saveState();
+  toast(`${capitalize(schema.label)} ${isEditing ? "atualizado" : "cadastrado"} com sucesso.`);
   renderCrud(schemaId);
 }
 
@@ -1463,8 +1505,15 @@ async function deleteItem(payload) {
   const confirmed = window.confirm(`Excluir ${label}? Esta acao nao pode ser desfeita.`);
   if (!confirmed) return;
 
+  const previousCollection = state[schema.collection].map((record) => ({ ...record }));
   state[schema.collection] = state[schema.collection].filter((record) => record.id !== id);
   await deleteRecordFromApi(schema.collection, id);
+  if (lastApiError) {
+    state[schema.collection] = previousCollection;
+    toast(apiErrorMessage("Nao foi possivel excluir o registro."));
+    renderCrud(schemaId);
+    return;
+  }
   saveState();
   toast("Registro excluido.");
   renderCrud(schemaId);
@@ -1977,7 +2026,12 @@ function bindActivity() {
 
 async function refreshActivityLog() {
   const logs = await loadActivityLog();
-  if (!logs) return;
+  if (!logs) {
+    if (lastApiError) {
+      toast(apiErrorMessage("Nao foi possivel atualizar o historico."));
+    }
+    return;
+  }
   state.auditLogs = logs;
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   refreshActivityView();
