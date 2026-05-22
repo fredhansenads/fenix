@@ -53,6 +53,8 @@ Autenticacao local:
 
 O login retorna um token de sessao temporario em memoria. Quando o servidor esta ativo, o frontend usa esse token no cabecalho `Authorization: Bearer <token>` para identificar o usuario nas acoes da API. No primeiro acesso, se o arquivo `data/fenix-db.json` ainda nao existir, o frontend inicializa a API com os dados locais antes de repetir o login.
 
+As senhas salvas pela API local sao convertidas para hash `scrypt` antes da gravacao. As respostas publicas da API nao retornam senha nem hash de senha dos usuarios.
+
 O servidor mantem compatibilidade com o estado completo em:
 
 - `GET /api/state`
@@ -109,4 +111,4 @@ As permissoes por acao controlam quem pode criar, editar e excluir registros por
 
 Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados. Quando um token invalido ou expirado e enviado, a API retorna `401 Unauthorized`.
 
-A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, armazenar senhas com hash seguro e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo.
+A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo.

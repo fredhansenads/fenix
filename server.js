@@ -46,7 +46,7 @@ const actionPermissions = {
 
 const validationRules = {
   users: {
-    required: ["name", "email", "password", "role", "status"],
+    required: ["name", "email", "role", "status"],
     allowed: {
       role: ["admin", "gestor", "financeiro", "comercial", "operacional", "colaborador", "visualizador"],
       status: ["ativo", "inativo"]
@@ -182,11 +182,17 @@ async function handleLoginApi(request, response) {
   const password = String(payload.password || "");
   const database = await readDatabase();
   const users = database.exists && Array.isArray(database.data.users) ? database.data.users : [];
-  const user = users.find((item) => String(item.email || "").toLowerCase() === email && item.password === password && item.status === "ativo");
+  const user = users.find((item) => String(item.email || "").toLowerCase() === email && verifyPassword(password, item) && item.status === "ativo");
 
   if (!user) {
     sendJson(response, 401, { error: "Invalid credentials" });
     return;
+  }
+
+  if (!user.passwordHash && user.password) {
+    user.passwordHash = hashPassword(user.password);
+    delete user.password;
+    await writeDatabase(database.data);
   }
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -221,7 +227,7 @@ async function handleLogoutApi(request, response) {
 async function handleStateApi(request, response) {
   if (request.method === "GET") {
     const database = await readDatabase();
-    sendJson(response, database.exists ? 200 : 404, database.exists ? database.data : { error: "Database not initialized" });
+    sendJson(response, database.exists ? 200 : 404, database.exists ? sanitizeState(database.data) : { error: "Database not initialized" });
     return;
   }
 
@@ -231,10 +237,10 @@ async function handleStateApi(request, response) {
     const database = await readDatabase();
     const currentLog = database.exists && Array.isArray(database.data.auditLogs) ? database.data.auditLogs : [];
     const payloadLog = Array.isArray(payload.auditLogs) ? payload.auditLogs : [];
-    const nextPayload = {
+    const nextPayload = prepareDatabasePayload({
       ...payload,
       auditLogs: currentLog.length >= payloadLog.length ? currentLog : payloadLog
-    };
+    }, database.exists ? database.data : {});
     await writeDatabase(nextPayload);
     sendJson(response, 200, { ok: true });
     return;
@@ -280,10 +286,10 @@ async function handleCollectionApi(request, response, collection, id) {
       sendJson(response, 400, validation);
       return;
     }
-    data[collection].push(item);
+    data[collection].push(prepareRecordForStorage(collection, item));
     const auditLog = addActivityLog(data, request, "created", collection, item);
     await writeDatabase(data);
-    sendJson(response, 201, { ...item, auditLog });
+    sendJson(response, 201, { ...sanitizeRecord(collection, item), auditLog });
     return;
   }
 
@@ -303,10 +309,10 @@ async function handleCollectionApi(request, response, collection, id) {
       sendJson(response, 400, validation);
       return;
     }
-    data[collection][index] = item;
+    data[collection][index] = prepareRecordForStorage(collection, item, previousItem);
     const auditLog = addActivityLog(data, request, "updated", collection, item, previousItem);
     await writeDatabase(data);
-    sendJson(response, 200, { ...data[collection][index], auditLog });
+    sendJson(response, 200, { ...sanitizeRecord(collection, data[collection][index]), auditLog });
     return;
   }
 
@@ -432,8 +438,74 @@ function getRequestToken(request) {
 }
 
 function sanitizeUser(user) {
-  const { password, ...safeUser } = user;
+  const { password, passwordHash, ...safeUser } = user;
   return safeUser;
+}
+
+function sanitizeState(data) {
+  const sanitized = { ...(data || {}) };
+  sanitized.users = Array.isArray(sanitized.users) ? sanitized.users.map(sanitizeUser) : [];
+  return sanitized;
+}
+
+function sanitizeRecord(collection, record) {
+  return collection === "users" ? sanitizeUser(record) : record;
+}
+
+function prepareDatabasePayload(payload, currentData = {}) {
+  const nextPayload = { ...(payload || {}) };
+  nextPayload.users = Array.isArray(nextPayload.users)
+    ? nextPayload.users.map((user) => {
+      const currentUser = findCurrentUser(currentData.users, user);
+      return prepareUserForStorage(user, currentUser);
+    })
+    : [];
+  return nextPayload;
+}
+
+function prepareRecordForStorage(collection, record, previousRecord = null) {
+  if (collection === "users") {
+    return prepareUserForStorage(record, previousRecord);
+  }
+  return record;
+}
+
+function prepareUserForStorage(user, currentUser = null) {
+  const prepared = { ...(user || {}) };
+  if (!isBlank(prepared.password)) {
+    prepared.passwordHash = hashPassword(prepared.password);
+  } else if (currentUser?.passwordHash) {
+    prepared.passwordHash = currentUser.passwordHash;
+  } else if (currentUser?.password) {
+    prepared.passwordHash = hashPassword(currentUser.password);
+  }
+  delete prepared.password;
+  return prepared;
+}
+
+function findCurrentUser(users, user) {
+  const currentUsers = Array.isArray(users) ? users : [];
+  return currentUsers.find((item) => item.id === user?.id)
+    || currentUsers.find((item) => String(item.email || "").toLowerCase() === String(user?.email || "").toLowerCase())
+    || null;
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, user) {
+  if (!user || isBlank(password)) return false;
+  if (user.passwordHash) {
+    const [, salt, storedHash] = String(user.passwordHash).split("$");
+    if (!salt || !storedHash) return false;
+    const hash = crypto.scryptSync(String(password), salt, 64);
+    const stored = Buffer.from(storedHash, "hex");
+    return stored.length === hash.length && crypto.timingSafeEqual(stored, hash);
+  }
+  return user.password === password;
 }
 
 function getRecordLabel(item) {
@@ -476,6 +548,10 @@ function validateRecord(collection, record) {
       fields[field] = "Campo obrigatorio.";
     }
   });
+
+  if (collection === "users" && isBlank(record.password) && isBlank(record.passwordHash)) {
+    fields.password = "Campo obrigatorio.";
+  }
 
   Object.entries(rules.allowed || {}).forEach(([field, options]) => {
     if (!isBlank(record[field]) && !options.includes(record[field])) {

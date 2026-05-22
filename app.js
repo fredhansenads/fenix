@@ -369,19 +369,24 @@ async function handleLogin(event) {
   event.preventDefault();
   const email = document.querySelector("#loginEmail").value.trim().toLowerCase();
   const password = document.querySelector("#loginPassword").value;
-  const user = state.users.find((item) => item.email.toLowerCase() === email && item.password === password && item.status === "ativo");
+  const localUser = state.users.find((item) => item.email.toLowerCase() === email && item.status === "ativo");
   const message = document.querySelector("#loginMessage");
+
+  let apiSession = await loginToApi(email, password);
+  if (!apiSession && localUser?.password === password) {
+    await saveStateToApi({ ...state, session: null });
+    apiSession = await loginToApi(email, password);
+  }
+
+  const user = apiSession?.user
+    ? state.users.find((item) => item.id === apiSession.user.id) || state.users.find((item) => item.email.toLowerCase() === email) || apiSession.user
+    : localUser?.password === password ? localUser : null;
 
   if (!user) {
     message.textContent = "Credenciais invalidas ou usuario inativo.";
     return;
   }
 
-  let apiSession = await loginToApi(email, password);
-  if (!apiSession) {
-    await saveStateToApi({ ...state, session: null });
-    apiSession = await loginToApi(email, password);
-  }
   state.session = {
     userId: user.id,
     loggedAt: new Date().toISOString(),
@@ -1202,7 +1207,7 @@ function renderForm(schemaId, item = {}, showCancel = false) {
   const schema = schemas[schemaId];
   const fields = schema.fields.map(([name, label, type, options, className]) => {
     const value = item[name] || "";
-    const required = isRequiredField(schemaId, name);
+    const required = isRequiredField(schemaId, name, Boolean(item.id));
     return `
       <label class="${className || ""}">
         <span class="field-label">${label}${required ? '<small>Obrigatorio</small>' : ""}</span>
@@ -1236,7 +1241,10 @@ function renderInput(name, type, value, options, required = false) {
   return `<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${requiredAttribute} />`;
 }
 
-function isRequiredField(schemaId, name) {
+function isRequiredField(schemaId, name, isEditing = false) {
+  if (schemaId === "users" && name === "password" && isEditing) {
+    return false;
+  }
   return schemas[schemaId]?.required?.includes(name) || false;
 }
 
@@ -1325,8 +1333,11 @@ async function saveForm(event, schemaId) {
   }
   const formData = new FormData(form);
   const item = Object.fromEntries(formData.entries());
+  if (schemaId === "users" && isEditing && !String(item.password || "").trim()) {
+    delete item.password;
+  }
 
-  const invalidField = findInvalidField(schemaId, item);
+  const invalidField = findInvalidField(schemaId, item, isEditing);
   if (invalidField) {
     showFormError(form, `${columnLabel(invalidField)} e obrigatorio.`);
     form.querySelector(`[name="${invalidField}"]`)?.focus();
@@ -1359,9 +1370,12 @@ async function saveForm(event, schemaId) {
   renderCrud(schemaId);
 }
 
-function findInvalidField(schemaId, item) {
+function findInvalidField(schemaId, item, isEditing = false) {
   const schema = schemas[schemaId];
   return (schema.required || []).find((field) => {
+    if (schemaId === "users" && field === "password" && isEditing) {
+      return false;
+    }
     const value = item[field];
     if (value === undefined || value === null || String(value).trim() === "") {
       return true;
