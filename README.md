@@ -31,7 +31,7 @@ node server.js
 - Propostas
 - Projetos
 - Tarefas
-- Relatorios com exportacao CSV
+- Relatorios executivos com exportacao CSV
 - Notificacoes internas
 - Historico de atividades
 - Configuracoes administrativas
@@ -80,5 +80,12 @@ O modulo de notificacoes internas monitora automaticamente:
 - Contas a receber vencidas ou proximas do vencimento
 - Tarefas atrasadas ou proximas do prazo
 - Propostas vencidas ou proximas do vencimento
+
+Os relatorios executivos exportam:
+
+- Resumo executivo
+- Indicadores comerciais, financeiros, operacionais e cadastrais
+- Relatorio consolidado com indicadores, vencimentos e notificacoes
+- Visoes separadas por area e listas operacionais em CSV
 
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

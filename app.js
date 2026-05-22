@@ -1280,10 +1280,9 @@ function renderReports() {
         <h3>Relatorios executivos</h3>
       </div>
       <div class="toolbar-actions">
-        <button type="button" data-export="receivables">Exportar receitas</button>
-        <button type="button" class="secondary" data-export="payables">Exportar despesas</button>
-        <button type="button" class="secondary" data-export="proposals">Exportar propostas</button>
-        <button type="button" class="secondary" data-export="tasks">Exportar tarefas</button>
+        <button type="button" data-report-export="summary">Resumo executivo</button>
+        <button type="button" class="secondary" data-report-export="indicators">Indicadores</button>
+        <button type="button" class="secondary" data-report-export="consolidated">Consolidado</button>
       </div>
     </section>
     <section class="grid four-columns">
@@ -1311,6 +1310,10 @@ function renderReports() {
       <div class="panel">
         <div class="panel-header"><h3>Exportacoes disponiveis</h3></div>
         <div class="panel-body quick-actions">
+          <button type="button" data-report-export="financial">Financeiro</button>
+          <button type="button" data-report-export="commercial">Comercial</button>
+          <button type="button" data-report-export="operational">Operacional</button>
+          <button type="button" data-report-export="registry">Cadastros</button>
           <button type="button" data-export="clients">Clientes</button>
           <button type="button" data-export="suppliers">Fornecedores</button>
           <button type="button" data-export="projects">Projetos</button>
@@ -1320,6 +1323,7 @@ function renderReports() {
     </section>
   `;
   content.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", () => exportCsv(button.dataset.export)));
+  content.querySelectorAll("[data-report-export]").forEach((button) => button.addEventListener("click", () => exportReportCsv(button.dataset.reportExport, reports)));
 }
 
 function buildFinancialReport() {
@@ -1402,6 +1406,103 @@ function buildRegistryReport() {
       ["Cadastros", "Usuarios ativos", activeUsers, "Pessoas com acesso ao sistema"]
     ]
   };
+}
+
+function exportReportCsv(type, reports = []) {
+  const rows = buildReportExportRows(type, reports);
+  if (!rows.length) {
+    toast("Nao ha dados para exportar.");
+    return;
+  }
+  downloadCsv(`fenix-relatorio-${type}.csv`, rows);
+  toast("Relatorio exportado.");
+}
+
+function buildReportExportRows(type, reports) {
+  if (type === "summary") {
+    return reports.map((report) => ({
+      secao: "Resumo executivo",
+      area: report.title,
+      indicador: report.title,
+      valor: report.value,
+      leitura: report.summary,
+      data: today()
+    }));
+  }
+
+  if (type === "indicators") {
+    return reports.flatMap((report) => report.rows.map(([area, indicator, value, reading]) => ({
+      secao: "Indicadores",
+      area,
+      indicador: indicator,
+      valor: value,
+      leitura: reading,
+      data: today()
+    })));
+  }
+
+  if (type === "consolidated") {
+    return [
+      ...buildReportExportRows("summary", reports),
+      ...buildReportExportRows("indicators", reports),
+      ...buildFinancialDueRows(),
+      ...buildNotificationExportRows()
+    ];
+  }
+
+  const reportNames = {
+    financial: "Financeiro",
+    commercial: "Comercial",
+    operational: "Operacional",
+    registry: "Cadastros"
+  };
+  const report = reports.find((item) => item.title === reportNames[type]);
+  if (!report) return [];
+
+  return report.rows.map(([area, indicator, value, reading]) => ({
+    secao: report.title,
+    area,
+    indicador: indicator,
+    valor: value,
+    leitura: reading,
+    data: today()
+  }));
+}
+
+function buildFinancialDueRows() {
+  const payables = state.payables
+    .filter((item) => item.status === "pendente")
+    .map((item) => ({
+      secao: "Vencimentos",
+      area: "Financeiro",
+      indicador: "Conta a pagar",
+      valor: money(item.amount),
+      leitura: item.description,
+      data: item.dueDate
+    }));
+  const receivables = state.receivables
+    .filter((item) => item.status === "pendente")
+    .map((item) => ({
+      secao: "Vencimentos",
+      area: "Financeiro",
+      indicador: "Conta a receber",
+      valor: money(item.amount),
+      leitura: item.description,
+      data: item.dueDate
+    }));
+
+  return [...payables, ...receivables].sort((a, b) => String(a.data).localeCompare(String(b.data)));
+}
+
+function buildNotificationExportRows() {
+  return buildNotifications().map((notification) => ({
+    secao: "Notificacoes",
+    area: notification.area,
+    indicador: notification.title,
+    valor: notification.tone === "danger" ? "Critico" : "Atencao",
+    leitura: notification.detail,
+    data: notification.date
+  }));
 }
 
 function renderReportRows(rows) {
@@ -1647,14 +1748,26 @@ function exportCsv(collection, schemaId = "") {
     toast("Nao ha dados para exportar.");
     return;
   }
-  const headers = Object.keys(rows[0]);
-  const csv = [headers.join(";"), ...rows.map((row) => headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  downloadCsv(`fenix-${collection}.csv`, rows);
+  toast("Arquivo CSV exportado.");
+}
+
+function downloadCsv(filename, rows) {
+  const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const csv = [
+    headers.join(";"),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(";"))
+  ].join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `santus-${collection}.csv`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function toast(message) {
