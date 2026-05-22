@@ -92,6 +92,7 @@ const listFilters = {};
 const statusFilters = {};
 const activityFilters = { query: "", action: "", collection: "" };
 let lastApiError = null;
+let handlingUnauthorized = false;
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -259,6 +260,9 @@ async function apiRequest(path, options = {}) {
         status: response.status,
         payload
       };
+      if (response.status === 401) {
+        expireSession();
+      }
       return null;
     }
     return payload;
@@ -286,6 +290,21 @@ function apiErrorMessage(fallback = "Nao foi possivel concluir a acao na API.") 
   }
 
   return lastApiError.payload?.message || lastApiError.payload?.error || fallback;
+}
+
+function expireSession() {
+  if (handlingUnauthorized || !state.session) {
+    return;
+  }
+
+  handlingUnauthorized = true;
+  state.session = null;
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  showLogin();
+  toast("Sessao expirada ou invalida. Entre novamente para continuar.");
+  window.setTimeout(() => {
+    handlingUnauthorized = false;
+  }, 1000);
 }
 
 function collectionApiPath(collection, id = "") {
@@ -438,7 +457,7 @@ async function handleLogin(event) {
 async function handleLogout() {
   await logoutFromApi(state.session?.apiToken);
   state.session = null;
-  saveState();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
   showLogin();
 }
 
@@ -1404,6 +1423,7 @@ async function saveForm(event, schemaId) {
   if (lastApiError) {
     state[schema.collection] = previousCollection;
     state.receivables = previousReceivables;
+    if (lastApiError.status === 401) return;
     showFormError(form, apiErrorMessage(`Nao foi possivel salvar ${schema.label}.`));
     return;
   }
@@ -1413,6 +1433,7 @@ async function saveForm(event, schemaId) {
     if (lastApiError) {
       state[schema.collection] = previousCollection;
       state.receivables = previousReceivables;
+      if (lastApiError.status === 401) return;
       showFormError(form, apiErrorMessage("Registro salvo, mas nao foi possivel gerar o recebimento automatico."));
       return;
     }
@@ -1510,6 +1531,7 @@ async function deleteItem(payload) {
   await deleteRecordFromApi(schema.collection, id);
   if (lastApiError) {
     state[schema.collection] = previousCollection;
+    if (lastApiError.status === 401) return;
     toast(apiErrorMessage("Nao foi possivel excluir o registro."));
     renderCrud(schemaId);
     return;
@@ -2028,6 +2050,7 @@ async function refreshActivityLog() {
   const logs = await loadActivityLog();
   if (!logs) {
     if (lastApiError) {
+      if (lastApiError.status === 401) return;
       toast(apiErrorMessage("Nao foi possivel atualizar o historico."));
     }
     return;
