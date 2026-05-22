@@ -29,6 +29,7 @@ node server.js
 - Contas a receber
 - Fluxo financeiro basico
 - Propostas
+- Contratos
 - Projetos
 - Tarefas
 - Relatorios executivos com exportacao CSV
@@ -58,7 +59,7 @@ E tambem expoe rotas por modulo para preparar a migracao futura:
 - `PUT /api/clients/:id`
 - `DELETE /api/clients/:id`
 
-O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `projects` e `tasks`.
+O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `contracts`, `projects` e `tasks`.
 
 O historico de atividades pode ser consultado em:
 
@@ -80,6 +81,7 @@ O modulo de notificacoes internas monitora automaticamente:
 - Contas a receber vencidas ou proximas do vencimento
 - Tarefas atrasadas ou proximas do prazo
 - Propostas vencidas ou proximas do vencimento
+- Contratos vencidos ou proximos do vencimento
 
 Os relatorios executivos exportam:
 

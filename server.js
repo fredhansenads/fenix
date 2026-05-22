@@ -24,6 +24,7 @@ const collections = new Set([
   "payables",
   "receivables",
   "proposals",
+  "contracts",
   "projects",
   "tasks"
 ]);
@@ -81,6 +82,14 @@ const validationRules = {
     },
     positiveNumbers: ["amount"],
     dates: ["validUntil", "sentAt", "approvedAt"]
+  },
+  contracts: {
+    required: ["clientId", "contractNumber", "title", "amount", "startDate", "endDate", "status", "responsibleId"],
+    allowed: {
+      status: ["rascunho", "ativo", "suspenso", "encerrado", "cancelado"]
+    },
+    positiveNumbers: ["amount"],
+    dates: ["startDate", "endDate", "signedAt"]
   },
   projects: {
     required: ["clientId", "name", "responsibleId", "startDate", "dueDate", "status"],

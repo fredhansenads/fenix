@@ -1,6 +1,6 @@
 const STORE_KEY = "santus_erp_mvp";
 const API_STATE_URL = "/api/state";
-const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "projects", "tasks"]);
+const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
   { id: "dashboard", label: "Dashboard", title: "Visao geral", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
@@ -8,6 +8,7 @@ const modules = [
   { id: "suppliers", label: "Fornecedores", title: "Fornecedores", roles: ["admin", "gestor", "financeiro"] },
   { id: "finance", label: "Financeiro", title: "Financeiro", roles: ["admin", "gestor", "financeiro"] },
   { id: "proposals", label: "Propostas", title: "Propostas comerciais", roles: ["admin", "gestor", "comercial"] },
+  { id: "contracts", label: "Contratos", title: "Contratos", roles: ["admin", "gestor", "financeiro", "comercial"] },
   { id: "projects", label: "Projetos", title: "Projetos", roles: ["admin", "gestor", "operacional", "comercial"] },
   { id: "tasks", label: "Tarefas", title: "Tarefas", roles: ["admin", "gestor", "operacional", "colaborador"] },
   { id: "reports", label: "Relatorios", title: "Relatorios", roles: ["admin", "gestor", "financeiro", "comercial"] },
@@ -58,6 +59,9 @@ const initialData = {
   proposals: [
     { id: uid(), clientId: null, title: "ERP interno fase 1", description: "Implantacao do MVP administrativo.", amount: 18000, validUntil: isoOffset(12), status: "enviada", responsibleId: null, sentAt: isoOffset(-4), approvedAt: "", notes: "" },
     { id: uid(), clientId: null, title: "Automacao comercial", description: "Fluxo de CRM e propostas.", amount: 9500, validUntil: isoOffset(20), status: "aprovada", responsibleId: null, sentAt: isoOffset(-10), approvedAt: isoOffset(-1), notes: "" }
+  ],
+  contracts: [
+    { id: uid(), clientId: null, contractNumber: "FENIX-2026-001", title: "Contrato de implantacao ERP", amount: 18000, startDate: isoOffset(-5), endDate: isoOffset(85), status: "ativo", responsibleId: null, signedAt: isoOffset(-5), notes: "Contrato demonstrativo do MVP." }
   ],
   projects: [
     { id: uid(), clientId: null, name: "Implantacao ERP SANTUS", description: "MVP administrativo e financeiro.", responsibleId: null, startDate: isoOffset(-2), dueDate: isoOffset(28), status: "em_andamento" }
@@ -128,6 +132,7 @@ function normalizeState(savedState) {
     "payables",
     "receivables",
     "proposals",
+    "contracts",
     "projects",
     "tasks",
     "auditLogs"
@@ -255,6 +260,10 @@ function hydrateReferences() {
     if (!item.clientId) item.clientId = index === 0 ? secondClient : firstClient;
     if (!item.responsibleId) item.responsibleId = admin;
   });
+  state.contracts.forEach((item) => {
+    if (!item.clientId) item.clientId = firstClient;
+    if (!item.responsibleId) item.responsibleId = admin;
+  });
   state.projects.forEach((item) => {
     if (!item.clientId) item.clientId = firstClient;
     if (!item.responsibleId) item.responsibleId = admin;
@@ -359,6 +368,7 @@ function navigate(moduleId) {
     suppliers: () => renderCrud("suppliers"),
     finance: renderFinance,
     proposals: () => renderCrud("proposals"),
+    contracts: () => renderCrud("contracts"),
     projects: () => renderCrud("projects"),
     tasks: () => renderCrud("tasks"),
     reports: renderReports,
@@ -398,8 +408,8 @@ function addDays(days) {
 }
 
 function statusClass(status) {
-  if (["ativo", "aprovada", "recebido", "pago", "concluida", "concluido"].includes(status)) return "success";
-  if (["pendente", "enviada", "em_andamento", "prospect", "rascunho"].includes(status)) return "warning";
+  if (["ativo", "aprovada", "recebido", "pago", "concluida", "concluido", "encerrado"].includes(status)) return "success";
+  if (["pendente", "enviada", "em_andamento", "prospect", "rascunho", "suspenso"].includes(status)) return "warning";
   if (["vencido", "recusada", "cancelado", "inativo"].includes(status)) return "danger";
   return "neutral";
 }
@@ -679,6 +689,30 @@ function buildNotifications() {
       }
     });
 
+  state.contracts
+    .filter((item) => ["ativo", "suspenso"].includes(item.status) && item.endDate)
+    .forEach((item) => {
+      if (item.endDate < todayValue) {
+        notifications.push({
+          tone: "danger",
+          area: "Contratos",
+          title: "Contrato vencido",
+          detail: `${item.title} venceu em ${formatDate(item.endDate)}.`,
+          date: item.endDate,
+          target: "contracts"
+        });
+      } else if (item.endDate <= warningLimit) {
+        notifications.push({
+          tone: "warning",
+          area: "Contratos",
+          title: "Contrato perto do vencimento",
+          detail: `${item.title} vence em ${formatDate(item.endDate)}.`,
+          date: item.endDate,
+          target: "contracts"
+        });
+      }
+    });
+
   return notifications.sort((a, b) => {
     const toneOrder = { danger: 0, warning: 1, neutral: 2 };
     return (toneOrder[a.tone] ?? 9) - (toneOrder[b.tone] ?? 9) || String(a.date).localeCompare(String(b.date));
@@ -736,6 +770,24 @@ const schemas = {
       ["notes", "Observacoes", "textarea", null, "full"]
     ],
     columns: ["title", "clientId", "amount", "validUntil", "status"]
+  },
+  contracts: {
+    label: "contrato",
+    collection: "contracts",
+    required: ["clientId", "contractNumber", "title", "amount", "startDate", "endDate", "status", "responsibleId"],
+    fields: [
+      ["clientId", "Cliente", "relation", "clients"],
+      ["contractNumber", "Numero do contrato", "text"],
+      ["title", "Titulo", "text"],
+      ["amount", "Valor", "number"],
+      ["startDate", "Inicio", "date"],
+      ["endDate", "Fim", "date"],
+      ["status", "Status", "select", ["rascunho", "ativo", "suspenso", "encerrado", "cancelado"]],
+      ["responsibleId", "Responsavel", "relation", "users"],
+      ["signedAt", "Assinatura", "date"],
+      ["notes", "Observacoes", "textarea", null, "full"]
+    ],
+    columns: ["contractNumber", "title", "clientId", "amount", "endDate", "status"]
   },
   projects: {
     label: "projeto",
@@ -949,6 +1001,10 @@ function rowToneClass(schemaId, item) {
     if (item.validUntil < todayValue) return "row-danger";
     if (item.validUntil <= warningLimit) return "row-warning";
   }
+  if (schemaId === "contracts" && ["ativo", "suspenso"].includes(item.status) && item.endDate) {
+    if (item.endDate < todayValue) return "row-danger";
+    if (item.endDate <= warningLimit) return "row-warning";
+  }
   return "";
 }
 
@@ -961,6 +1017,7 @@ function columnLabel(column) {
     status: "Status",
     category: "Categoria",
     title: "Titulo",
+    contractNumber: "Contrato",
     clientId: "Cliente",
     supplierId: "Fornecedor",
     projectId: "Projeto",
@@ -968,6 +1025,8 @@ function columnLabel(column) {
     amount: "Valor",
     validUntil: "Validade",
     startDate: "Inicio",
+    endDate: "Fim",
+    signedAt: "Assinatura",
     dueDate: "Prazo",
     priority: "Prioridade",
     role: "Perfil",
@@ -978,7 +1037,7 @@ function columnLabel(column) {
 
 function formatCell(column, value) {
   if (["amount"].includes(column)) return money(value);
-  if (["validUntil", "dueDate", "startDate", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
+  if (["validUntil", "dueDate", "startDate", "endDate", "signedAt", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
   if (["status", "priority", "role"].includes(column)) return `<span class="status ${statusClass(value)}">${labelize(roleLabels[value] || value)}</span>`;
   if (column === "clientId") return state.clients.find((item) => item.id === value)?.name || "-";
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "-";
@@ -989,7 +1048,7 @@ function formatCell(column, value) {
 
 function formatCellText(column, value) {
   if (["amount"].includes(column)) return money(value);
-  if (["validUntil", "dueDate", "startDate", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
+  if (["validUntil", "dueDate", "startDate", "endDate", "signedAt", "paymentDate", "receivedDate", "completedAt"].includes(column)) return formatDate(value);
   if (["status", "priority", "role"].includes(column)) return roleLabels[value] || labelize(value);
   if (column === "clientId") return state.clients.find((item) => item.id === value)?.name || "";
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "";
@@ -1402,6 +1461,7 @@ function renderReports() {
           <button type="button" data-report-export="operational">Operacional</button>
           <button type="button" data-report-export="registry">Cadastros</button>
           <button type="button" data-export="clients">Clientes</button>
+          <button type="button" data-export="contracts">Contratos</button>
           <button type="button" data-export="suppliers">Fornecedores</button>
           <button type="button" data-export="projects">Projetos</button>
           <button type="button" data-export="tasks">Tarefas</button>
@@ -1480,15 +1540,17 @@ function buildRegistryReport() {
   const prospects = state.clients.filter((item) => item.status === "prospect").length;
   const activeSuppliers = state.suppliers.filter((item) => item.status === "ativo").length;
   const activeUsers = state.users.filter((item) => item.status === "ativo").length;
+  const activeContracts = state.contracts.filter((item) => item.status === "ativo").length;
 
   return {
     title: "Cadastros",
     value: activeClients,
-    summary: `${prospects} prospect${prospects === 1 ? "" : "s"} em carteira`,
+    summary: `${activeContracts} contrato${activeContracts === 1 ? "" : "s"} ativo${activeContracts === 1 ? "" : "s"}`,
     tone: "kpi-neutral",
     rows: [
       ["Cadastros", "Clientes ativos", activeClients, "Clientes prontos para propostas e projetos"],
       ["Cadastros", "Prospects", prospects, "Oportunidades em acompanhamento"],
+      ["Cadastros", "Contratos ativos", activeContracts, "Contratos vigentes com clientes"],
       ["Cadastros", "Fornecedores ativos", activeSuppliers, "Base de fornecedores disponivel"],
       ["Cadastros", "Usuarios ativos", activeUsers, "Pessoas com acesso ao sistema"]
     ]
@@ -1901,6 +1963,7 @@ function activityCollectionLabel(collection) {
     payables: "Contas a pagar",
     receivables: "Contas a receber",
     proposals: "Propostas",
+    contracts: "Contratos",
     projects: "Projetos",
     tasks: "Tarefas"
   };
@@ -1943,7 +2006,7 @@ function renderSettings() {
       <article class="card">
         <p class="eyebrow">Roadmap</p>
         <h3>Expansao modular</h3>
-        <p>Contratos avancados, portal do cliente, automacoes, IA, integracoes fiscais, API e PWA estao previstos para as proximas fases.</p>
+        <p>Contratos basicos ja foram iniciados. Portal do cliente, automacoes, IA, integracoes fiscais, API e PWA estao previstos para as proximas fases.</p>
       </article>
     </section>
     <section class="panel">
