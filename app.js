@@ -200,7 +200,7 @@ async function loadStateFromApi() {
 
 async function saveStateToApi(nextState) {
   if (!location.protocol.startsWith("http")) {
-    return;
+    return false;
   }
 
   const apiState = {
@@ -217,8 +217,10 @@ async function saveStateToApi(nextState) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(apiState)
     });
+    return true;
   } catch {
     // The localStorage fallback keeps the MVP usable without the local server.
+    return false;
   }
 }
 
@@ -375,7 +377,11 @@ async function handleLogin(event) {
     return;
   }
 
-  const apiSession = await loginToApi(email, password);
+  let apiSession = await loginToApi(email, password);
+  if (!apiSession) {
+    await saveStateToApi({ ...state, session: null });
+    apiSession = await loginToApi(email, password);
+  }
   state.session = {
     userId: user.id,
     loggedAt: new Date().toISOString(),

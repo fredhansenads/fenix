@@ -51,7 +51,7 @@ Autenticacao local:
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 
-O login retorna um token de sessao temporario em memoria. Quando o servidor esta ativo, o frontend usa esse token no cabecalho `Authorization: Bearer <token>` para identificar o usuario nas acoes da API.
+O login retorna um token de sessao temporario em memoria. Quando o servidor esta ativo, o frontend usa esse token no cabecalho `Authorization: Bearer <token>` para identificar o usuario nas acoes da API. No primeiro acesso, se o arquivo `data/fenix-db.json` ainda nao existir, o frontend inicializa a API com os dados locais antes de repetir o login.
 
 O servidor mantem compatibilidade com o estado completo em:
 
