@@ -94,4 +94,6 @@ As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros
 
 A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes, edicoes e exclusoes, leitura textual dos eventos registrados e exportacao CSV respeitando os filtros aplicados.
 
+As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores.
+
 A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.

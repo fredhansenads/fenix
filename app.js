@@ -28,6 +28,18 @@ const roleLabels = {
   visualizador: "Visualizador"
 };
 
+const actionPermissions = {
+  clients: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
+  suppliers: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  payables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  receivables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  proposals: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
+  contracts: { create: ["admin", "gestor", "financeiro", "comercial"], edit: ["admin", "gestor", "financeiro", "comercial"], delete: ["admin", "gestor"] },
+  projects: { create: ["admin", "gestor", "operacional", "comercial"], edit: ["admin", "gestor", "operacional", "comercial"], delete: ["admin", "gestor"] },
+  tasks: { create: ["admin", "gestor", "operacional", "colaborador"], edit: ["admin", "gestor", "operacional", "colaborador"], delete: ["admin", "gestor"] },
+  users: { create: ["admin"], edit: ["admin"], delete: ["admin"] }
+};
+
 const initialData = {
   session: null,
   auditLogs: [],
@@ -327,6 +339,38 @@ function getSessionUser() {
 function canAccess(module) {
   const user = getSessionUser();
   return user && module.roles.includes(user.role);
+}
+
+function canCreate(schemaId) {
+  return canPerform(schemaId, "create");
+}
+
+function canEdit(schemaId) {
+  return canPerform(schemaId, "edit");
+}
+
+function canDelete(schemaId) {
+  return canPerform(schemaId, "delete");
+}
+
+function canPerform(schemaId, action) {
+  const user = getSessionUser();
+  if (!user) return false;
+  return actionPermissions[schemaId]?.[action]?.includes(user.role) || false;
+}
+
+function renderAccessDenied(message = "Seu perfil nao possui permissao para esta acao.") {
+  content.innerHTML = `
+    <section class="panel">
+      <div class="panel-header"><h3>Acesso restrito</h3></div>
+      <div class="panel-body">
+        <div class="empty-state compact">
+          <h3>Acao nao permitida</h3>
+          <p>${message}</p>
+        </div>
+      </div>
+    </section>
+  `;
 }
 
 function renderNavigation() {
@@ -894,7 +938,7 @@ function renderCrud(schemaId) {
             </select>
           </label>
         ` : ""}
-        <button type="button" data-new="${schemaId}">Novo ${schema.label}</button>
+        ${canCreate(schemaId) ? `<button type="button" data-new="${schemaId}">Novo ${schema.label}</button>` : ""}
         <button type="button" class="secondary" data-export="${schema.collection}">Exportar CSV</button>
       </div>
     </section>
@@ -935,6 +979,10 @@ function filterItems(schemaId, items, query, status = "") {
 function renderCrudForm(schemaId, item = {}) {
   const schema = schemas[schemaId];
   const isEditing = Boolean(item.id);
+  if ((isEditing && !canEdit(schemaId)) || (!isEditing && !canCreate(schemaId))) {
+    renderAccessDenied();
+    return;
+  }
   content.innerHTML = `
     <section class="toolbar">
       <div>
@@ -955,31 +1003,37 @@ function renderCrudForm(schemaId, item = {}) {
 
 function renderTable(schemaId, items, actions = true, query = "", status = "") {
   const schema = schemas[schemaId];
+  const showActions = actions && (canEdit(schemaId) || canDelete(schemaId));
   if (!items.length) {
     return renderEmptyState(schemaId, actions, query, status);
   }
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
   const rows = items.map((item) => {
     const cells = schema.columns.map((column) => `<td>${formatCell(column, item[column])}</td>`).join("");
-    const actionCell = actions ? `<td><div class="table-actions"><button class="secondary" type="button" data-edit="${schemaId}:${item.id}">Editar</button><button class="danger" type="button" data-delete="${schemaId}:${item.id}">Excluir</button></div></td>` : "";
+    const actionCell = showActions ? `<td><div class="table-actions">${renderRowActions(schemaId, item.id)}</div></td>` : "";
     return `<tr class="${rowToneClass(schemaId, item)}">${cells}${actionCell}</tr>`;
   }).join("");
-  return `<table class="data-table"><thead><tr>${headings}${actions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="data-table"><thead><tr>${headings}${showActions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderRowActions(schemaId, id) {
+  return `
+    ${canEdit(schemaId) ? `<button class="secondary" type="button" data-edit="${schemaId}:${id}">Editar</button>` : ""}
+    ${canDelete(schemaId) ? `<button class="danger" type="button" data-delete="${schemaId}:${id}">Excluir</button>` : ""}
+  `;
 }
 
 function renderEmptyState(schemaId, actions, query, status) {
   const schema = schemas[schemaId];
   const hasFilters = Boolean(query || status);
+  const filterAction = hasFilters ? `<button type="button" class="secondary" data-clear-filters="${schemaId}">Limpar filtros</button>` : "";
+  const createAction = canCreate(schemaId) ? `<button type="button" data-new="${schemaId}">Novo ${schema.label}</button>` : "";
+  const actionsMarkup = [filterAction, createAction].filter(Boolean).join("");
   return `
     <div class="empty-state">
       <h3>${hasFilters ? "Nenhum resultado encontrado" : `Nenhum ${schema.label} cadastrado ainda`}</h3>
       <p>${hasFilters ? "Ajuste a busca ou limpe os filtros para ver todos os registros." : "Comece criando o primeiro registro deste modulo."}</p>
-      ${actions ? `
-        <div class="empty-actions">
-          ${hasFilters ? `<button type="button" class="secondary" data-clear-filters="${schemaId}">Limpar filtros</button>` : ""}
-          <button type="button" data-new="${schemaId}">Novo ${schema.label}</button>
-        </div>
-      ` : ""}
+      ${actions && actionsMarkup ? `<div class="empty-actions">${actionsMarkup}</div>` : ""}
     </div>
   `;
 }
@@ -1185,6 +1239,11 @@ async function saveForm(event, schemaId) {
   event.preventDefault();
   const schema = schemas[schemaId];
   const form = event.currentTarget;
+  const isEditing = Boolean(form.dataset.id);
+  if ((isEditing && !canEdit(schemaId)) || (!isEditing && !canCreate(schemaId))) {
+    showFormError(form, "Seu perfil nao possui permissao para salvar este registro.");
+    return;
+  }
   const formData = new FormData(form);
   const item = Object.fromEntries(formData.entries());
 
@@ -1200,7 +1259,6 @@ async function saveForm(event, schemaId) {
   });
 
   const collection = state[schema.collection];
-  const isEditing = Boolean(form.dataset.id);
   let savedItem;
   if (isEditing) {
     const index = collection.findIndex((record) => record.id === form.dataset.id);
@@ -1270,6 +1328,10 @@ function applyBusinessRules(collection, item) {
 
 function editItem(payload) {
   const [schemaId, id] = payload.split(":");
+  if (!canEdit(schemaId)) {
+    renderAccessDenied();
+    return;
+  }
   const schema = schemas[schemaId];
   const item = state[schema.collection].find((record) => record.id === id);
   if (!["payables", "receivables"].includes(schemaId)) {
@@ -1288,6 +1350,10 @@ function editItem(payload) {
 
 async function deleteItem(payload) {
   const [schemaId, id] = payload.split(":");
+  if (!canDelete(schemaId)) {
+    toast("Seu perfil nao possui permissao para excluir registros.");
+    return;
+  }
   const schema = schemas[schemaId];
   const item = state[schema.collection].find((record) => record.id === id);
   const label = item?.name || item?.title || item?.description || schema.label;
@@ -1344,7 +1410,7 @@ function financePanel(schemaId, title) {
           <h3>${title}</h3>
           <span class="panel-subtitle">${filteredItems.length} registro${filteredItems.length === 1 ? "" : "s"} · ${money(total)}</span>
         </div>
-        <button type="button" data-new-finance="${schemaId}">Novo</button>
+        ${canCreate(schemaId) ? `<button type="button" data-new-finance="${schemaId}">Novo</button>` : ""}
       </div>
       <div class="finance-filters">
         <label class="search-field">
