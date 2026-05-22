@@ -91,6 +91,7 @@ let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
 const activityFilters = { query: "", action: "", collection: "" };
+const reportFilters = { from: "", to: "" };
 let lastApiError = null;
 let handlingUnauthorized = false;
 
@@ -1653,22 +1654,43 @@ function bindFinance() {
 }
 
 function renderReports() {
-  const financial = buildFinancialReport();
-  const commercial = buildCommercialReport();
-  const operational = buildOperationalReport();
-  const registry = buildRegistryReport();
+  const period = getReportPeriod();
+  const financial = buildFinancialReport(period);
+  const commercial = buildCommercialReport(period);
+  const operational = buildOperationalReport(period);
+  const registry = buildRegistryReport(period);
   const reports = [financial, commercial, operational, registry];
+  const periodLabel = getReportPeriodLabel(period);
 
   content.innerHTML = `
     <section class="toolbar">
       <div>
         <p class="eyebrow">Analise</p>
         <h3>Relatorios executivos</h3>
+        <p>${periodLabel}</p>
       </div>
       <div class="toolbar-actions">
         <button type="button" data-report-export="summary">Resumo executivo</button>
         <button type="button" class="secondary" data-report-export="indicators">Indicadores</button>
         <button type="button" class="secondary" data-report-export="consolidated">Consolidado</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h3>Periodo de analise</h3><button type="button" class="secondary" data-clear-report-period>Limpar periodo</button></div>
+      <div class="panel-body">
+        <form class="form-grid compact-form" data-report-period>
+          <label>
+            <span class="field-label">Inicio</span>
+            <input type="date" name="from" value="${escapeHtml(reportFilters.from)}" />
+          </label>
+          <label>
+            <span class="field-label">Fim</span>
+            <input type="date" name="to" value="${escapeHtml(reportFilters.to)}" />
+          </label>
+          <div class="toolbar-actions">
+            <button type="submit">Aplicar</button>
+          </div>
+        </form>
       </div>
     </section>
     <section class="grid four-columns">
@@ -1709,21 +1731,35 @@ function renderReports() {
       </div>
     </section>
   `;
+  content.querySelector("[data-report-period]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    reportFilters.from = String(formData.get("from") || "");
+    reportFilters.to = String(formData.get("to") || "");
+    renderReports();
+  });
+  content.querySelector("[data-clear-report-period]")?.addEventListener("click", () => {
+    reportFilters.from = "";
+    reportFilters.to = "";
+    renderReports();
+  });
   content.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", () => exportCsv(button.dataset.export)));
-  content.querySelectorAll("[data-report-export]").forEach((button) => button.addEventListener("click", () => exportReportCsv(button.dataset.reportExport, reports)));
+  content.querySelectorAll("[data-report-export]").forEach((button) => button.addEventListener("click", () => exportReportCsv(button.dataset.reportExport, reports, period)));
 }
 
-function buildFinancialReport() {
-  const revenue = sum(state.receivables, "amount");
-  const expenses = sum(state.payables, "amount");
-  const received = sum(state.receivables.filter((item) => item.status === "recebido"), "amount");
-  const paid = sum(state.payables.filter((item) => item.status === "pago"), "amount");
-  const overdue = state.payables.filter((item) => item.status === "pendente" && item.dueDate < today()).length;
+function buildFinancialReport(period) {
+  const receivables = filterByPeriod(state.receivables, ["dueDate", "receivedDate"], period);
+  const payables = filterByPeriod(state.payables, ["dueDate", "paymentDate"], period);
+  const revenue = sum(receivables, "amount");
+  const expenses = sum(payables, "amount");
+  const received = sum(receivables.filter((item) => item.status === "recebido"), "amount");
+  const paid = sum(payables.filter((item) => item.status === "pago"), "amount");
+  const overdue = payables.filter((item) => item.status === "pendente" && item.dueDate < today()).length;
 
   return {
     title: "Financeiro",
     value: money(received - paid),
-    summary: `${money(revenue)} em receitas cadastradas`,
+    summary: `${money(revenue)} em receitas no periodo`,
     tone: received - paid >= 0 ? "kpi-success" : "kpi-danger",
     rows: [
       ["Financeiro", "Receita total cadastrada", money(revenue), "Soma de contas a receber"],
@@ -1734,12 +1770,13 @@ function buildFinancialReport() {
   };
 }
 
-function buildCommercialReport() {
-  const approved = state.proposals.filter((item) => item.status === "aprovada").length;
-  const sent = state.proposals.filter((item) => item.status === "enviada").length;
-  const total = state.proposals.length;
+function buildCommercialReport(period) {
+  const proposals = filterByPeriod(state.proposals, ["sentAt", "approvedAt", "validUntil"], period);
+  const approved = proposals.filter((item) => item.status === "aprovada").length;
+  const sent = proposals.filter((item) => item.status === "enviada").length;
+  const total = proposals.length;
   const conversion = total ? Math.round((approved / total) * 100) : 0;
-  const ticket = approved ? sum(state.proposals.filter((item) => item.status === "aprovada"), "amount") / approved : 0;
+  const ticket = approved ? sum(proposals.filter((item) => item.status === "aprovada"), "amount") / approved : 0;
 
   return {
     title: "Comercial",
@@ -1755,11 +1792,13 @@ function buildCommercialReport() {
   };
 }
 
-function buildOperationalReport() {
-  const openProjects = state.projects.filter((item) => item.status === "em_andamento").length;
-  const openTasks = state.tasks.filter((item) => !["concluida", "cancelada"].includes(item.status)).length;
-  const completedTasks = state.tasks.filter((item) => item.status === "concluida").length;
-  const productivity = state.tasks.length ? Math.round((completedTasks / state.tasks.length) * 100) : 0;
+function buildOperationalReport(period) {
+  const projects = filterByPeriod(state.projects, ["startDate", "dueDate"], period);
+  const tasks = filterByPeriod(state.tasks, ["dueDate", "completedAt"], period);
+  const openProjects = projects.filter((item) => item.status === "em_andamento").length;
+  const openTasks = tasks.filter((item) => !["concluida", "cancelada"].includes(item.status)).length;
+  const completedTasks = tasks.filter((item) => item.status === "concluida").length;
+  const productivity = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
 
   return {
     title: "Operacional",
@@ -1775,12 +1814,13 @@ function buildOperationalReport() {
   };
 }
 
-function buildRegistryReport() {
+function buildRegistryReport(period) {
   const activeClients = state.clients.filter((item) => item.status === "ativo").length;
   const prospects = state.clients.filter((item) => item.status === "prospect").length;
   const activeSuppliers = state.suppliers.filter((item) => item.status === "ativo").length;
   const activeUsers = state.users.filter((item) => item.status === "ativo").length;
-  const activeContracts = state.contracts.filter((item) => item.status === "ativo").length;
+  const contracts = filterByPeriod(state.contracts, ["startDate", "endDate", "signedAt"], period);
+  const activeContracts = contracts.filter((item) => item.status === "ativo").length;
 
   return {
     title: "Cadastros",
@@ -1797,8 +1837,40 @@ function buildRegistryReport() {
   };
 }
 
-function exportReportCsv(type, reports = []) {
-  const rows = buildReportExportRows(type, reports);
+function getReportPeriod() {
+  if (reportFilters.from && reportFilters.to && reportFilters.from > reportFilters.to) {
+    return {
+      from: reportFilters.to,
+      to: reportFilters.from
+    };
+  }
+  return {
+    from: reportFilters.from,
+    to: reportFilters.to
+  };
+}
+
+function getReportPeriodLabel(period = getReportPeriod()) {
+  if (period.from && period.to) return `Periodo: ${formatDate(period.from)} a ${formatDate(period.to)}`;
+  if (period.from) return `Periodo: a partir de ${formatDate(period.from)}`;
+  if (period.to) return `Periodo: ate ${formatDate(period.to)}`;
+  return "Periodo: todos os dados cadastrados";
+}
+
+function filterByPeriod(items, dateFields, period = getReportPeriod()) {
+  if (!period.from && !period.to) return items;
+  return items.filter((item) => dateFields.some((field) => isDateInPeriod(item[field], period)));
+}
+
+function isDateInPeriod(value, period = getReportPeriod()) {
+  if (!value) return false;
+  if (period.from && value < period.from) return false;
+  if (period.to && value > period.to) return false;
+  return true;
+}
+
+function exportReportCsv(type, reports = [], period = getReportPeriod()) {
+  const rows = buildReportExportRows(type, reports, period);
   if (!rows.length) {
     toast("Nao ha dados para exportar.");
     return;
@@ -1807,7 +1879,8 @@ function exportReportCsv(type, reports = []) {
   toast("Relatorio exportado.");
 }
 
-function buildReportExportRows(type, reports) {
+function buildReportExportRows(type, reports, period = getReportPeriod()) {
+  const periodLabel = getReportPeriodLabel(period);
   if (type === "summary") {
     return reports.map((report) => ({
       secao: "Resumo executivo",
@@ -1815,6 +1888,7 @@ function buildReportExportRows(type, reports) {
       indicador: report.title,
       valor: report.value,
       leitura: report.summary,
+      periodo: periodLabel,
       data: today()
     }));
   }
@@ -1826,16 +1900,17 @@ function buildReportExportRows(type, reports) {
       indicador: indicator,
       valor: value,
       leitura: reading,
+      periodo: periodLabel,
       data: today()
     })));
   }
 
   if (type === "consolidated") {
     return [
-      ...buildReportExportRows("summary", reports),
-      ...buildReportExportRows("indicators", reports),
-      ...buildFinancialDueRows(),
-      ...buildNotificationExportRows()
+      ...buildReportExportRows("summary", reports, period),
+      ...buildReportExportRows("indicators", reports, period),
+      ...buildFinancialDueRows(period),
+      ...buildNotificationExportRows(period)
     ];
   }
 
@@ -1854,42 +1929,48 @@ function buildReportExportRows(type, reports) {
     indicador: indicator,
     valor: value,
     leitura: reading,
+    periodo: periodLabel,
     data: today()
   }));
 }
 
-function buildFinancialDueRows() {
+function buildFinancialDueRows(period = getReportPeriod()) {
   const payables = state.payables
-    .filter((item) => item.status === "pendente")
+    .filter((item) => item.status === "pendente" && isDateInPeriod(item.dueDate, period))
     .map((item) => ({
       secao: "Vencimentos",
       area: "Financeiro",
       indicador: "Conta a pagar",
       valor: money(item.amount),
       leitura: item.description,
+      periodo: getReportPeriodLabel(period),
       data: item.dueDate
     }));
   const receivables = state.receivables
-    .filter((item) => item.status === "pendente")
+    .filter((item) => item.status === "pendente" && isDateInPeriod(item.dueDate, period))
     .map((item) => ({
       secao: "Vencimentos",
       area: "Financeiro",
       indicador: "Conta a receber",
       valor: money(item.amount),
       leitura: item.description,
+      periodo: getReportPeriodLabel(period),
       data: item.dueDate
     }));
 
   return [...payables, ...receivables].sort((a, b) => String(a.data).localeCompare(String(b.data)));
 }
 
-function buildNotificationExportRows() {
-  return buildNotifications().map((notification) => ({
+function buildNotificationExportRows(period = getReportPeriod()) {
+  return buildNotifications()
+    .filter((notification) => isDateInPeriod(notification.date, period))
+    .map((notification) => ({
     secao: "Notificacoes",
     area: notification.area,
     indicador: notification.title,
     valor: notification.tone === "danger" ? "Critico" : "Atencao",
     leitura: notification.detail,
+    periodo: getReportPeriodLabel(period),
     data: notification.date
   }));
 }

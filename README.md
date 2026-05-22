@@ -103,6 +103,8 @@ Os relatorios executivos exportam:
 - Relatorio consolidado com indicadores, vencimentos e notificacoes
 - Visoes separadas por area e listas operacionais em CSV
 
+Os relatorios tambem permitem filtro por periodo, usando datas de vencimento, recebimento, pagamento, validade, aprovacao e prazos operacionais conforme o tipo de dado analisado. As exportacoes CSV incluem o periodo aplicado.
+
 As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros, datas formatadas, destaque visual para atrasos e vencimentos proximos, foco acessivel em campos e botoes, e selecao explicita em campos relacionados.
 
 A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes, edicoes e exclusoes, leitura textual dos eventos registrados e exportacao CSV respeitando os filtros aplicados.
