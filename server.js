@@ -225,8 +225,10 @@ async function handleLogoutApi(request, response) {
 }
 
 async function handleStateApi(request, response) {
+  const database = await readDatabase();
+
   if (request.method === "GET") {
-    const database = await readDatabase();
+    if (database.exists && !authorizeSessionRoles(request, response, ["admin"])) return;
     sendJson(response, database.exists ? 200 : 404, database.exists ? sanitizeState(database.data) : { error: "Database not initialized" });
     return;
   }
@@ -234,7 +236,7 @@ async function handleStateApi(request, response) {
   if (request.method === "PUT") {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    const database = await readDatabase();
+    if (database.exists && !authorizeSessionRoles(request, response, ["admin"])) return;
     const currentLog = database.exists && Array.isArray(database.data.auditLogs) ? database.data.auditLogs : [];
     const payloadLog = Array.isArray(payload.auditLogs) ? payload.auditLogs : [];
     const nextPayload = prepareDatabasePayload({
@@ -255,7 +257,7 @@ async function handleActivityLogApi(request, response) {
     return;
   }
 
-  if (!authorizeRoles(request, response, ["admin", "gestor"])) return;
+  if (!authorizeSessionRoles(request, response, ["admin", "gestor"])) return;
 
   const database = await readDatabase();
   const data = database.exists ? database.data : {};
@@ -365,6 +367,24 @@ function authorizeRoles(request, response, allowedRoles) {
   }
 
   if (allowedRoles.includes(authentication.actor.role)) {
+    return true;
+  }
+
+  sendJson(response, 403, {
+    error: "Forbidden",
+    message: "Perfil sem permissao para acessar este recurso."
+  });
+  return false;
+}
+
+function authorizeSessionRoles(request, response, allowedRoles) {
+  const session = getSessionFromRequest(request);
+  if (!session) {
+    sendUnauthorized(response);
+    return false;
+  }
+
+  if (allowedRoles.includes(session.role)) {
     return true;
   }
 

@@ -60,6 +60,8 @@ O servidor mantem compatibilidade com o estado completo em:
 - `GET /api/state`
 - `PUT /api/state`
 
+Depois que o banco local existe, essas rotas exigem sessao autenticada de `admin`, pois leem e gravam o estado completo do ERP. A unica excecao e o primeiro bootstrap: quando `data/fenix-db.json` ainda nao existe, o frontend pode inicializar o arquivo local.
+
 E tambem expoe rotas por modulo para preparar a migracao futura:
 
 - `GET /api/clients`

@@ -122,7 +122,7 @@ async function boot() {
 
 async function loadState() {
   const cachedSession = readCachedSession();
-  const apiState = await loadStateFromApi();
+  const apiState = await loadStateFromApi(cachedSession?.apiToken);
   if (apiState) {
     const normalized = normalizeState(apiState);
     const cachedUserExists = cachedSession?.userId && normalized.users.some((user) => user.id === cachedSession.userId);
@@ -182,13 +182,16 @@ function readCachedSession() {
   }
 }
 
-async function loadStateFromApi() {
+async function loadStateFromApi(token = "") {
   if (!location.protocol.startsWith("http")) {
     return null;
   }
 
   try {
-    const response = await fetch(API_STATE_URL, { cache: "no-store" });
+    const response = await fetch(API_STATE_URL, {
+      cache: "no-store",
+      headers: token ? { "Authorization": `Bearer ${token}` } : {}
+    });
     if (!response.ok) {
       return null;
     }
@@ -212,12 +215,15 @@ async function saveStateToApi(nextState) {
   };
 
   try {
-    await fetch(API_STATE_URL, {
+    const response = await fetch(API_STATE_URL, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(nextState.session?.apiToken ? { "Authorization": `Bearer ${nextState.session.apiToken}` } : {})
+      },
       body: JSON.stringify(apiState)
     });
-    return true;
+    return response.ok;
   } catch {
     // The localStorage fallback keeps the MVP usable without the local server.
     return false;
@@ -385,6 +391,10 @@ async function handleLogin(event) {
   if (!user) {
     message.textContent = "Credenciais invalidas ou usuario inativo.";
     return;
+  }
+
+  if (apiSession?.user && !state.users.some((item) => item.id === apiSession.user.id)) {
+    state.users.push(apiSession.user);
   }
 
   state.session = {
