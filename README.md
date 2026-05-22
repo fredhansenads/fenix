@@ -94,6 +94,12 @@ As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros
 
 A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes, edicoes e exclusoes, leitura textual dos eventos registrados e exportacao CSV respeitando os filtros aplicados.
 
-As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores.
+As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API identifica o perfil pelos cabecalhos enviados pelo sistema:
 
-A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, autenticacao segura e regras de permissao no servidor.
+- `x-fenix-user-id`
+- `x-fenix-user-name`
+- `x-fenix-user-role`
+
+Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados.
+
+A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL e adicionar autenticacao segura com sessao ou token para que esses cabecalhos sejam derivados do login, e nao enviados livremente pelo cliente.

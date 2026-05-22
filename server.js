@@ -29,6 +29,18 @@ const collections = new Set([
   "tasks"
 ]);
 
+const actionPermissions = {
+  clients: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
+  suppliers: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  payables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  receivables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
+  proposals: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
+  contracts: { create: ["admin", "gestor", "financeiro", "comercial"], edit: ["admin", "gestor", "financeiro", "comercial"], delete: ["admin", "gestor"] },
+  projects: { create: ["admin", "gestor", "operacional", "comercial"], edit: ["admin", "gestor", "operacional", "comercial"], delete: ["admin", "gestor"] },
+  tasks: { create: ["admin", "gestor", "operacional", "colaborador"], edit: ["admin", "gestor", "operacional", "colaborador"], delete: ["admin", "gestor"] },
+  users: { create: ["admin"], edit: ["admin"], delete: ["admin"] }
+};
+
 const validationRules = {
   users: {
     required: ["name", "email", "password", "role", "status"],
@@ -197,6 +209,7 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "POST") {
+    if (!authorizeAction(request, response, collection, "create")) return;
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
     const item = normalizeRecord(collection, { ...payload, id: payload.id || createId() });
@@ -213,6 +226,7 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "PUT" && id) {
+    if (!authorizeAction(request, response, collection, "edit")) return;
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
     const index = data[collection].findIndex((record) => record.id === id);
@@ -235,6 +249,7 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "DELETE" && id) {
+    if (!authorizeAction(request, response, collection, "delete")) return;
     const item = data[collection].find((record) => record.id === id);
     const before = data[collection].length;
     data[collection] = data[collection].filter((record) => record.id !== id);
@@ -249,6 +264,21 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   sendJson(response, 405, { error: "Method not allowed" });
+}
+
+function authorizeAction(request, response, collection, action) {
+  const actor = getActor(request);
+  const allowedRoles = actionPermissions[collection]?.[action];
+  if (!allowedRoles || allowedRoles.includes(actor.role)) {
+    return true;
+  }
+  sendJson(response, 403, {
+    error: "Forbidden",
+    message: "Perfil sem permissao para executar esta acao.",
+    action,
+    collection
+  });
+  return false;
 }
 
 function addActivityLog(data, request, action, collection, item, previousItem = null) {
@@ -274,7 +304,7 @@ function getActor(request) {
   return {
     id: request.headers["x-fenix-user-id"] || "local",
     name: request.headers["x-fenix-user-name"] || "Usuario local",
-    role: request.headers["x-fenix-user-role"] || "sistema"
+    role: request.headers["x-fenix-user-role"] || "admin"
   };
 }
 
