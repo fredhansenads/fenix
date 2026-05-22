@@ -72,6 +72,7 @@ let state = structuredClone(initialData);
 let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
+const activityFilters = { query: "", action: "", collection: "" };
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -1665,29 +1666,82 @@ function renderNotificationList(notifications) {
 
 function renderActivity() {
   const logs = Array.isArray(state.auditLogs) ? state.auditLogs : [];
+  const filteredLogs = filterActivityLogs(logs);
+  const summary = summarizeActivityLogs(logs);
   content.innerHTML = `
+    <section class="grid kpi-grid">
+      ${activityKpi("Atividades", "total", logs.length, logs.length ? "neutral" : "success")}
+      ${activityKpi("Criacoes", "created", summary.created, "success")}
+      ${activityKpi("Edicoes", "updated", summary.updated, "warning")}
+      ${activityKpi("Exclusoes", "deleted", summary.deleted, summary.deleted ? "danger" : "success")}
+    </section>
     <section class="toolbar">
       <div>
         <p class="eyebrow">Auditoria</p>
-        <h3>${logs.length} atividade${logs.length === 1 ? "" : "s"} registrada${logs.length === 1 ? "" : "s"}</h3>
+        <h3 data-activity-title>${activityTitle(filteredLogs.length, logs.length)}</h3>
       </div>
       <div class="toolbar-actions">
         <button type="button" class="secondary" data-refresh-activity>Atualizar</button>
-        <button type="button" class="secondary" data-export="auditLogs">Exportar CSV</button>
+        <button type="button" class="secondary" data-export-activity>Exportar CSV</button>
       </div>
     </section>
     <section class="panel">
-      <div class="panel-header"><h3>Eventos recentes</h3><span class="status neutral">ultimos 200 registros</span></div>
-      <div class="panel-body table-wrap" data-activity-table>${renderActivityTable(logs)}</div>
+      <div class="panel-header"><h3>Filtros</h3><button type="button" class="secondary" data-clear-activity-filters>Limpar filtros</button></div>
+      <div class="finance-filters">
+        <label class="search-field">
+          Buscar
+          <input type="search" data-activity-search value="${escapeHtml(activityFilters.query)}" placeholder="Registro, usuario ou campo alterado" />
+        </label>
+        <label class="filter-field">
+          Acao
+          <select data-activity-action>
+            <option value="">Todas</option>
+            ${["created", "updated", "deleted"].map((action) => `<option value="${action}" ${activityFilters.action === action ? "selected" : ""}>${activityActionLabel(action)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-field">
+          Modulo
+          <select data-activity-collection>
+            <option value="">Todos</option>
+            ${getActivityCollections(logs).map((collection) => `<option value="${collection}" ${activityFilters.collection === collection ? "selected" : ""}>${activityCollectionLabel(collection)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h3>Eventos recentes</h3><span class="status neutral" data-activity-counter>${filteredLogs.length} de ${logs.length}</span></div>
+      <div class="panel-body table-wrap" data-activity-table>${renderActivityTable(filteredLogs)}</div>
     </section>
   `;
   bindActivity();
   refreshActivityLog();
 }
 
+function activityKpi(label, key, value, tone = "neutral") {
+  return `<article class="card kpi-card kpi-${tone}"><span>${label}</span><strong data-activity-summary="${key}">${value}</strong></article>`;
+}
+
 function bindActivity() {
   content.querySelector("[data-refresh-activity]")?.addEventListener("click", refreshActivityLog);
-  content.querySelectorAll("[data-export]").forEach((button) => button.addEventListener("click", () => exportCsv(button.dataset.export)));
+  content.querySelector("[data-export-activity]")?.addEventListener("click", exportActivityCsv);
+  content.querySelector("[data-activity-search]")?.addEventListener("input", (event) => {
+    activityFilters.query = event.target.value;
+    refreshActivityView();
+  });
+  content.querySelector("[data-activity-action]")?.addEventListener("change", (event) => {
+    activityFilters.action = event.target.value;
+    refreshActivityView();
+  });
+  content.querySelector("[data-activity-collection]")?.addEventListener("change", (event) => {
+    activityFilters.collection = event.target.value;
+    refreshActivityView();
+  });
+  content.querySelector("[data-clear-activity-filters]")?.addEventListener("click", () => {
+    activityFilters.query = "";
+    activityFilters.action = "";
+    activityFilters.collection = "";
+    renderActivity();
+  });
 }
 
 async function refreshActivityLog() {
@@ -1695,10 +1749,83 @@ async function refreshActivityLog() {
   if (!logs) return;
   state.auditLogs = logs;
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  refreshActivityView();
+}
+
+function refreshActivityView() {
+  const logs = Array.isArray(state.auditLogs) ? state.auditLogs : [];
+  const filteredLogs = filterActivityLogs(logs);
+  const summary = summarizeActivityLogs(logs);
   const table = content.querySelector("[data-activity-table]");
-  const title = content.querySelector(".toolbar h3");
-  if (table) table.innerHTML = renderActivityTable(logs);
-  if (title) title.textContent = `${logs.length} atividade${logs.length === 1 ? "" : "s"} registrada${logs.length === 1 ? "" : "s"}`;
+  const title = content.querySelector("[data-activity-title]");
+  const counter = content.querySelector("[data-activity-counter]");
+  if (table) table.innerHTML = renderActivityTable(filteredLogs);
+  if (title) title.textContent = activityTitle(filteredLogs.length, logs.length);
+  if (counter) counter.textContent = `${filteredLogs.length} de ${logs.length}`;
+  updateActivitySummary("total", logs.length);
+  updateActivitySummary("created", summary.created);
+  updateActivitySummary("updated", summary.updated);
+  updateActivitySummary("deleted", summary.deleted);
+}
+
+function updateActivitySummary(key, value) {
+  const element = content.querySelector(`[data-activity-summary="${key}"]`);
+  if (element) element.textContent = value;
+}
+
+function activityTitle(filteredCount, totalCount) {
+  const label = totalCount === 1 ? "atividade registrada" : "atividades registradas";
+  return filteredCount === totalCount ? `${totalCount} ${label}` : `${filteredCount} de ${totalCount} ${label}`;
+}
+
+function summarizeActivityLogs(logs) {
+  return logs.reduce((summary, log) => {
+    summary[log.action] = (summary[log.action] || 0) + 1;
+    return summary;
+  }, { created: 0, updated: 0, deleted: 0 });
+}
+
+function filterActivityLogs(logs) {
+  const query = normalizeText(activityFilters.query);
+  return logs.filter((log) => {
+    const matchesAction = !activityFilters.action || log.action === activityFilters.action;
+    const matchesCollection = !activityFilters.collection || log.collection === activityFilters.collection;
+    const searchable = [
+      log.recordLabel,
+      log.recordId,
+      log.actorName,
+      log.actorRole,
+      activityActionLabel(log.action),
+      activityCollectionLabel(log.collection),
+      formatChangedFields(log.changedFields)
+    ].join(" ");
+    const matchesQuery = !query || normalizeText(searchable).includes(query);
+    return matchesAction && matchesCollection && matchesQuery;
+  });
+}
+
+function getActivityCollections(logs) {
+  return [...new Set(logs.map((log) => log.collection).filter(Boolean))]
+    .sort((a, b) => activityCollectionLabel(a).localeCompare(activityCollectionLabel(b), "pt-BR"));
+}
+
+function exportActivityCsv() {
+  const logs = filterActivityLogs(Array.isArray(state.auditLogs) ? state.auditLogs : []);
+  if (!logs.length) {
+    toast("Nao ha dados para exportar.");
+    return;
+  }
+  downloadCsv("fenix-auditoria.csv", logs.map((log) => ({
+    data: formatDateTime(log.createdAt),
+    acao: activityActionLabel(log.action),
+    modulo: activityCollectionLabel(log.collection),
+    registro: log.recordLabel || log.recordId || "-",
+    usuario: log.actorName || "Usuario local",
+    perfil: roleLabels[log.actorRole] || log.actorRole || "-",
+    campos: formatChangedFields(log.changedFields),
+    leitura: activityReading(log, false)
+  })));
+  toast("Auditoria exportada.");
 }
 
 async function loadActivityLog() {
@@ -1719,13 +1846,18 @@ async function loadActivityLog() {
 
 function renderActivityTable(logs) {
   if (!logs.length) {
-    return `<div class="empty-state">Nenhuma atividade registrada ainda.</div>`;
+    return `
+      <div class="empty-state">
+        <h3>Nenhuma atividade encontrada</h3>
+        <p>Atualize o historico ou ajuste os filtros para consultar outros eventos.</p>
+      </div>
+    `;
   }
 
   return `
     <table class="data-table">
       <thead>
-        <tr><th>Data</th><th>Acao</th><th>Modulo</th><th>Registro</th><th>Usuario</th><th>Campos</th></tr>
+        <tr><th>Data</th><th>Acao</th><th>Modulo</th><th>Registro</th><th>Usuario</th><th>Campos</th><th>Leitura</th></tr>
       </thead>
       <tbody>
         ${logs.map((log) => `
@@ -1736,6 +1868,7 @@ function renderActivityTable(logs) {
             <td>${escapeHtml(log.recordLabel || log.recordId || "-")}</td>
             <td>${escapeHtml(log.actorName || "Usuario local")}</td>
             <td>${formatChangedFields(log.changedFields)}</td>
+            <td>${activityReading(log)}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -1776,6 +1909,16 @@ function activityCollectionLabel(collection) {
 
 function formatChangedFields(fields) {
   return Array.isArray(fields) && fields.length ? fields.map(columnLabel).join(", ") : "-";
+}
+
+function activityReading(log, escaped = true) {
+  const action = activityActionLabel(log.action).toLowerCase();
+  const clean = escaped ? escapeHtml : (value) => String(value || "");
+  const record = clean(log.recordLabel || log.recordId || "registro");
+  const collection = activityCollectionLabel(log.collection).toLowerCase();
+  const actor = clean(log.actorName || "Usuario local");
+  const fields = Array.isArray(log.changedFields) && log.changedFields.length ? ` Campos: ${formatChangedFields(log.changedFields)}.` : "";
+  return `${actor} ${action} ${record} em ${collection}.${fields}`;
 }
 
 function formatDateTime(value) {
