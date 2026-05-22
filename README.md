@@ -74,6 +74,8 @@ O historico de atividades pode ser consultado em:
 
 - `GET /api/activity-log`
 
+Esse endpoint exige usuario autenticado com perfil `admin` ou `gestor`, acompanhando a restricao ja aplicada na navegacao do frontend.
+
 As rotas modulares ja aplicam validacao basica no servidor:
 
 - Campos obrigatorios por modulo

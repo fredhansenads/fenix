@@ -2054,15 +2054,7 @@ async function loadActivityLog() {
     return null;
   }
 
-  try {
-    const response = await fetch("/api/activity-log", { cache: "no-store" });
-    if (!response.ok) {
-      return null;
-    }
-    return response.json();
-  } catch {
-    return null;
-  }
+  return apiRequest("/api/activity-log", { method: "GET", cache: "no-store" });
 }
 
 function renderActivityTable(logs) {

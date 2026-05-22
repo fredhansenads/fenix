@@ -255,6 +255,8 @@ async function handleActivityLogApi(request, response) {
     return;
   }
 
+  if (!authorizeRoles(request, response, ["admin", "gestor"])) return;
+
   const database = await readDatabase();
   const data = database.exists ? database.data : {};
   sendJson(response, 200, Array.isArray(data.auditLogs) ? data.auditLogs : []);
@@ -337,10 +339,7 @@ async function handleCollectionApi(request, response, collection, id) {
 function authorizeAction(request, response, collection, action) {
   const authentication = authenticateActor(request);
   if (!authentication.valid) {
-    sendJson(response, 401, {
-      error: "Unauthorized",
-      message: "Sessao invalida ou expirada."
-    });
+    sendUnauthorized(response);
     return false;
   }
 
@@ -356,6 +355,31 @@ function authorizeAction(request, response, collection, action) {
     collection
   });
   return false;
+}
+
+function authorizeRoles(request, response, allowedRoles) {
+  const authentication = authenticateActor(request);
+  if (!authentication.valid) {
+    sendUnauthorized(response);
+    return false;
+  }
+
+  if (allowedRoles.includes(authentication.actor.role)) {
+    return true;
+  }
+
+  sendJson(response, 403, {
+    error: "Forbidden",
+    message: "Perfil sem permissao para acessar este recurso."
+  });
+  return false;
+}
+
+function sendUnauthorized(response) {
+  sendJson(response, 401, {
+    error: "Unauthorized",
+    message: "Sessao invalida ou expirada."
+  });
 }
 
 function addActivityLog(data, request, action, collection, item, previousItem = null) {
