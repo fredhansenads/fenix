@@ -1,5 +1,7 @@
 const STORE_KEY = "santus_erp_mvp";
 const API_STATE_URL = "/api/state";
+const API_LOGIN_URL = "/api/auth/login";
+const API_LOGOUT_URL = "/api/auth/logout";
 const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
@@ -119,10 +121,21 @@ async function boot() {
 }
 
 async function loadState() {
+  const cachedSession = readCachedSession();
   const apiState = await loadStateFromApi();
   if (apiState) {
-    localStorage.setItem(STORE_KEY, JSON.stringify(apiState));
-    return normalizeState(apiState);
+    const normalized = normalizeState(apiState);
+    const cachedUserExists = cachedSession?.userId && normalized.users.some((user) => user.id === cachedSession.userId);
+    const canRestoreCachedSession = cachedUserExists && (!normalized.session || cachedSession.userId === normalized.session.userId);
+    if (canRestoreCachedSession) {
+      normalized.session = {
+        ...normalized.session,
+        ...cachedSession,
+        apiTokenExpiresAt: cachedSession.apiTokenExpiresAt || ""
+      };
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
+    return normalized;
   }
 
   const saved = localStorage.getItem(STORE_KEY);
@@ -161,6 +174,14 @@ function saveState() {
   saveStateToApi(state);
 }
 
+function readCachedSession() {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY) || "{}").session || null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadStateFromApi() {
   if (!location.protocol.startsWith("http")) {
     return null;
@@ -182,11 +203,19 @@ async function saveStateToApi(nextState) {
     return;
   }
 
+  const apiState = {
+    ...nextState,
+    session: nextState.session ? {
+      userId: nextState.session.userId,
+      loggedAt: nextState.session.loggedAt
+    } : null
+  };
+
   try {
     await fetch(API_STATE_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextState)
+      body: JSON.stringify(apiState)
     });
   } catch {
     // The localStorage fallback keeps the MVP usable without the local server.
@@ -200,10 +229,12 @@ async function apiRequest(path, options = {}) {
 
   try {
     const user = getSessionUser();
+    const token = state.session?.apiToken;
     const response = await fetch(path, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         ...(user ? {
           "X-Fenix-User-Id": user.id,
           "X-Fenix-User-Name": user.name,
@@ -223,6 +254,41 @@ async function apiRequest(path, options = {}) {
 
 function collectionApiPath(collection, id = "") {
   return `/api/${collection}${id ? `/${id}` : ""}`;
+}
+
+async function loginToApi(email, password) {
+  if (!location.protocol.startsWith("http")) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(API_LOGIN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function logoutFromApi(token) {
+  if (!location.protocol.startsWith("http") || !token) {
+    return;
+  }
+
+  try {
+    await fetch(API_LOGOUT_URL, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+  } catch {
+    // Local logout must remain usable even if the server is offline.
+  }
 }
 
 async function saveRecordToApi(collection, item, isEditing) {
@@ -297,7 +363,7 @@ function isoOffset(days) {
   return date.toISOString().slice(0, 10);
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const email = document.querySelector("#loginEmail").value.trim().toLowerCase();
   const password = document.querySelector("#loginPassword").value;
@@ -309,12 +375,19 @@ function handleLogin(event) {
     return;
   }
 
-  state.session = { userId: user.id, loggedAt: new Date().toISOString() };
+  const apiSession = await loginToApi(email, password);
+  state.session = {
+    userId: user.id,
+    loggedAt: new Date().toISOString(),
+    apiToken: apiSession?.token || "",
+    apiTokenExpiresAt: apiSession?.expiresAt || ""
+  };
   saveState();
   showApp();
 }
 
-function handleLogout() {
+async function handleLogout() {
+  await logoutFromApi(state.session?.apiToken);
   state.session = null;
   saveState();
   showLogin();

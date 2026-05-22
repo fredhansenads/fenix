@@ -46,6 +46,13 @@ Esta versao usa uma persistencia hibrida:
 
 ## API local
 
+Autenticacao local:
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+
+O login retorna um token de sessao temporario em memoria. Quando o servidor esta ativo, o frontend usa esse token no cabecalho `Authorization: Bearer <token>` para identificar o usuario nas acoes da API.
+
 O servidor mantem compatibilidade com o estado completo em:
 
 - `GET /api/state`
@@ -94,12 +101,12 @@ As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros
 
 A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes, edicoes e exclusoes, leitura textual dos eventos registrados e exportacao CSV respeitando os filtros aplicados.
 
-As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API identifica o perfil pelos cabecalhos enviados pelo sistema:
+As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API prioriza o token de sessao gerado no login e mantem compatibilidade com os cabecalhos enviados pelo sistema:
 
 - `x-fenix-user-id`
 - `x-fenix-user-name`
 - `x-fenix-user-role`
 
-Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados.
+Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados. Quando um token invalido ou expirado e enviado, a API retorna `401 Unauthorized`.
 
-A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL e adicionar autenticacao segura com sessao ou token para que esses cabecalhos sejam derivados do login, e nao enviados livremente pelo cliente.
+A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL, armazenar senhas com hash seguro e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo.

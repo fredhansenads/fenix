@@ -2,12 +2,15 @@ const http = require("http");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
+const crypto = require("crypto");
 
 const root = __dirname;
 const dataDir = path.join(root, "data");
 const databaseFile = path.join(dataDir, "fenix-db.json");
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
+const sessions = new Map();
+const sessionTtlMs = 1000 * 60 * 60 * 8;
 
 const types = {
   ".html": "text/html;charset=utf-8",
@@ -137,6 +140,16 @@ async function readBody(request) {
 }
 
 async function handleApi(request, response, requestUrl) {
+  if (requestUrl.pathname === "/api/auth/login") {
+    await handleLoginApi(request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/auth/logout") {
+    await handleLogoutApi(request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/state") {
     await handleStateApi(request, response);
     return;
@@ -154,6 +167,55 @@ async function handleApi(request, response, requestUrl) {
   }
 
   sendJson(response, 404, { error: "Endpoint not found" });
+}
+
+async function handleLoginApi(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const payload = await parseJsonBody(request, response);
+  if (!payload) return;
+
+  const email = String(payload.email || "").trim().toLowerCase();
+  const password = String(payload.password || "");
+  const database = await readDatabase();
+  const users = database.exists && Array.isArray(database.data.users) ? database.data.users : [];
+  const user = users.find((item) => String(item.email || "").toLowerCase() === email && item.password === password && item.status === "ativo");
+
+  if (!user) {
+    sendJson(response, 401, { error: "Invalid credentials" });
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + sessionTtlMs).toISOString();
+  sessions.set(token, {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    expiresAt
+  });
+
+  sendJson(response, 200, {
+    token,
+    expiresAt,
+    user: sanitizeUser(user)
+  });
+}
+
+async function handleLogoutApi(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const token = getRequestToken(request);
+  if (token) {
+    sessions.delete(token);
+  }
+  sendJson(response, 200, { ok: true });
 }
 
 async function handleStateApi(request, response) {
@@ -267,7 +329,16 @@ async function handleCollectionApi(request, response, collection, id) {
 }
 
 function authorizeAction(request, response, collection, action) {
-  const actor = getActor(request);
+  const authentication = authenticateActor(request);
+  if (!authentication.valid) {
+    sendJson(response, 401, {
+      error: "Unauthorized",
+      message: "Sessao invalida ou expirada."
+    });
+    return false;
+  }
+
+  const actor = authentication.actor;
   const allowedRoles = actionPermissions[collection]?.[action];
   if (!allowedRoles || allowedRoles.includes(actor.role)) {
     return true;
@@ -301,11 +372,68 @@ function addActivityLog(data, request, action, collection, item, previousItem = 
 }
 
 function getActor(request) {
+  const authentication = authenticateActor(request);
+  if (authentication.valid) {
+    return authentication.actor;
+  }
+
+  return getHeaderActor(request);
+}
+
+function authenticateActor(request) {
+  const session = getSessionFromRequest(request);
+  if (session) {
+    return {
+      valid: true,
+      actor: {
+        id: session.id,
+        name: session.name,
+        role: session.role
+      }
+    };
+  }
+
+  if (getRequestToken(request)) {
+    return { valid: false, actor: null };
+  }
+
+  return { valid: true, actor: getHeaderActor(request) };
+}
+
+function getHeaderActor(request) {
   return {
     id: request.headers["x-fenix-user-id"] || "local",
     name: request.headers["x-fenix-user-name"] || "Usuario local",
     role: request.headers["x-fenix-user-role"] || "admin"
   };
+}
+
+function getSessionFromRequest(request) {
+  const token = getRequestToken(request);
+  if (!token) return null;
+
+  const session = sessions.get(token);
+  if (!session) return null;
+
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+
+  return session;
+}
+
+function getRequestToken(request) {
+  const authorization = request.headers.authorization || "";
+  if (authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+  return request.headers["x-fenix-session-token"] || "";
+}
+
+function sanitizeUser(user) {
+  const { password, ...safeUser } = user;
+  return safeUser;
 }
 
 function getRecordLabel(item) {
