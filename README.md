@@ -46,6 +46,8 @@ Esta versao usa uma persistencia hibrida:
 
 O backend concentra leitura e escrita em uma camada simples de repositorio JSON. Essa separacao prepara a migracao futura para PostgreSQL sem alterar diretamente as rotas e regras de negocio.
 
+O arquivo `docs/postgres-schema.sql` contem o primeiro desenho do schema PostgreSQL, cobrindo os modulos atuais, relacionamentos, restricoes, auditoria e notificacoes lidas.
+
 ## API local
 
 Autenticacao local:
