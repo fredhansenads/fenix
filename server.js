@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const root = __dirname;
 const dataDir = path.join(root, "data");
 const databaseFile = path.join(dataDir, "fenix-db.json");
+const databaseRepository = createJsonDatabaseRepository(databaseFile);
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const sessions = new Map();
@@ -681,20 +682,32 @@ function isIsoDate(value) {
 }
 
 async function readDatabase() {
-  try {
-    const content = (await fsp.readFile(databaseFile, "utf-8")).replace(/^\uFEFF/, "");
-    return { exists: true, data: JSON.parse(content) };
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return { exists: false, data: {} };
-    }
-    throw error;
-  }
+  return databaseRepository.read();
 }
 
 async function writeDatabase(payload) {
-  await fsp.mkdir(dataDir, { recursive: true });
-  await fsp.writeFile(databaseFile, JSON.stringify(payload, null, 2), "utf-8");
+  await databaseRepository.write(payload);
+}
+
+function createJsonDatabaseRepository(filePath) {
+  const directory = path.dirname(filePath);
+  return {
+    async read() {
+      try {
+        const content = (await fsp.readFile(filePath, "utf-8")).replace(/^\uFEFF/, "");
+        return { exists: true, data: JSON.parse(content) };
+      } catch (error) {
+        if (error.code === "ENOENT") {
+          return { exists: false, data: {} };
+        }
+        throw error;
+      }
+    },
+    async write(payload) {
+      await fsp.mkdir(directory, { recursive: true });
+      await fsp.writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
+    }
+  };
 }
 
 async function parseJsonBody(request, response) {
