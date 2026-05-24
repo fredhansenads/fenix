@@ -86,7 +86,7 @@ As rotas modulares ja aplicam validacao basica no servidor:
 - Datas no formato `AAAA-MM-DD`
 - E-mails em formato valido para clientes, fornecedores e usuarios
 
-As acoes feitas pelas rotas modulares tambem geram auditoria inicial em `auditLogs`, com criacao, edicao, exclusao, usuario informado pelo frontend, modulo, registro e campos alterados.
+As acoes feitas pelas rotas modulares tambem geram auditoria em `auditLogs`, com criacao, edicao, exclusao, tentativas negadas, usuario informado pelo frontend, modulo, registro, campos alterados e metadados da requisicao como IP, origem, agente do navegador e referencia parcial da sessao.
 
 O modulo de notificacoes internas monitora automaticamente:
 

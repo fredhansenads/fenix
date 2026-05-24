@@ -281,7 +281,10 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "POST") {
-    if (!authorizeAction(request, response, collection, "create")) return;
+    if (!authorizeAction(request, response, collection, "create", data)) {
+      await writeDatabase(data);
+      return;
+    }
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
     const item = normalizeRecord(collection, { ...payload, id: payload.id || createId() });
@@ -298,7 +301,10 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "PUT" && id) {
-    if (!authorizeAction(request, response, collection, "edit")) return;
+    if (!authorizeAction(request, response, collection, "edit", data)) {
+      await writeDatabase(data);
+      return;
+    }
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
     const index = data[collection].findIndex((record) => record.id === id);
@@ -321,7 +327,10 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "DELETE" && id) {
-    if (!authorizeAction(request, response, collection, "delete")) return;
+    if (!authorizeAction(request, response, collection, "delete", data)) {
+      await writeDatabase(data);
+      return;
+    }
     const item = data[collection].find((record) => record.id === id);
     const before = data[collection].length;
     data[collection] = data[collection].filter((record) => record.id !== id);
@@ -338,9 +347,10 @@ async function handleCollectionApi(request, response, collection, id) {
   sendJson(response, 405, { error: "Method not allowed" });
 }
 
-function authorizeAction(request, response, collection, action) {
+function authorizeAction(request, response, collection, action, data = null) {
   const authentication = authenticateActor(request);
   if (!authentication.valid) {
+    addDeniedActivityLog(data, request, collection, action, "Sessao invalida ou expirada.");
     sendUnauthorized(response);
     return false;
   }
@@ -350,6 +360,7 @@ function authorizeAction(request, response, collection, action) {
   if (!allowedRoles || allowedRoles.includes(actor.role)) {
     return true;
   }
+  addDeniedActivityLog(data, request, collection, action, "Perfil sem permissao para executar esta acao.");
   sendJson(response, 403, {
     error: "Forbidden",
     message: "Perfil sem permissao para executar esta acao.",
@@ -357,6 +368,17 @@ function authorizeAction(request, response, collection, action) {
     collection
   });
   return false;
+}
+
+function addDeniedActivityLog(data, request, collection, action, reason) {
+  if (!data) return null;
+  return addActivityLog(data, request, "denied", collection, {
+    id: `${collection}:${action}`,
+    title: `Acao negada: ${action}`
+  }, null, {
+    deniedAction: action,
+    deniedReason: reason
+  });
 }
 
 function authorizeRoles(request, response, allowedRoles) {
@@ -402,7 +424,7 @@ function sendUnauthorized(response) {
   });
 }
 
-function addActivityLog(data, request, action, collection, item, previousItem = null) {
+function addActivityLog(data, request, action, collection, item, previousItem = null, extra = {}) {
   const actor = getActor(request);
   const auditLog = {
     id: createId(),
@@ -414,11 +436,31 @@ function addActivityLog(data, request, action, collection, item, previousItem = 
     actorName: actor.name,
     actorRole: actor.role,
     changedFields: previousItem ? getChangedFields(previousItem, item) : [],
+    metadata: getRequestMetadata(request),
+    ...extra,
     createdAt: new Date().toISOString()
   };
 
   data.auditLogs = [auditLog, ...(Array.isArray(data.auditLogs) ? data.auditLogs : [])].slice(0, 200);
   return auditLog;
+}
+
+function getRequestMetadata(request) {
+  const token = getRequestToken(request);
+  return {
+    ip: getRequestIp(request),
+    userAgent: request.headers["user-agent"] || "",
+    origin: request.headers.origin || request.headers.referer || request.headers.host || "",
+    sessionRef: token ? token.slice(0, 12) : ""
+  };
+}
+
+function getRequestIp(request) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+  if (forwardedFor) {
+    return String(forwardedFor).split(",")[0].trim();
+  }
+  return request.socket?.remoteAddress || "";
 }
 
 function getActor(request) {

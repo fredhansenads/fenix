@@ -2123,6 +2123,7 @@ function renderActivity() {
       ${activityKpi("Criacoes", "created", summary.created, "success")}
       ${activityKpi("Edicoes", "updated", summary.updated, "warning")}
       ${activityKpi("Exclusoes", "deleted", summary.deleted, summary.deleted ? "danger" : "success")}
+      ${activityKpi("Negadas", "denied", summary.denied, summary.denied ? "danger" : "success")}
     </section>
     <section class="toolbar">
       <div>
@@ -2145,7 +2146,7 @@ function renderActivity() {
           Acao
           <select data-activity-action>
             <option value="">Todas</option>
-            ${["created", "updated", "deleted"].map((action) => `<option value="${action}" ${activityFilters.action === action ? "selected" : ""}>${activityActionLabel(action)}</option>`).join("")}
+            ${["created", "updated", "deleted", "denied"].map((action) => `<option value="${action}" ${activityFilters.action === action ? "selected" : ""}>${activityActionLabel(action)}</option>`).join("")}
           </select>
         </label>
         <label class="filter-field">
@@ -2221,6 +2222,7 @@ function refreshActivityView() {
   updateActivitySummary("created", summary.created);
   updateActivitySummary("updated", summary.updated);
   updateActivitySummary("deleted", summary.deleted);
+  updateActivitySummary("denied", summary.denied);
 }
 
 function updateActivitySummary(key, value) {
@@ -2237,7 +2239,7 @@ function summarizeActivityLogs(logs) {
   return logs.reduce((summary, log) => {
     summary[log.action] = (summary[log.action] || 0) + 1;
     return summary;
-  }, { created: 0, updated: 0, deleted: 0 });
+  }, { created: 0, updated: 0, deleted: 0, denied: 0 });
 }
 
 function filterActivityLogs(logs) {
@@ -2250,6 +2252,9 @@ function filterActivityLogs(logs) {
       log.recordId,
       log.actorName,
       log.actorRole,
+      log.metadata?.ip,
+      log.metadata?.userAgent,
+      log.deniedReason,
       activityActionLabel(log.action),
       activityCollectionLabel(log.collection),
       formatChangedFields(log.changedFields)
@@ -2278,6 +2283,10 @@ function exportActivityCsv() {
     usuario: log.actorName || "Usuario local",
     perfil: roleLabels[log.actorRole] || log.actorRole || "-",
     campos: formatChangedFields(log.changedFields),
+    ip: log.metadata?.ip || "",
+    origem: log.metadata?.origin || "",
+    agente: log.metadata?.userAgent || "",
+    motivo_negacao: log.deniedReason || "",
     leitura: activityReading(log, false)
   })));
   toast("Auditoria exportada.");
@@ -2327,6 +2336,7 @@ function activityTone(action) {
   if (action === "created") return "success";
   if (action === "updated") return "warning";
   if (action === "deleted") return "danger";
+  if (action === "denied") return "danger";
   return "neutral";
 }
 
@@ -2334,7 +2344,8 @@ function activityActionLabel(action) {
   const labels = {
     created: "Criado",
     updated: "Atualizado",
-    deleted: "Excluido"
+    deleted: "Excluido",
+    denied: "Negado"
   };
   return labels[action] || labelize(action);
 }
@@ -2360,6 +2371,13 @@ function formatChangedFields(fields) {
 }
 
 function activityReading(log, escaped = true) {
+  if (log.action === "denied") {
+    const cleanDenied = escaped ? escapeHtml : (value) => String(value || "");
+    const actorDenied = cleanDenied(log.actorName || "Usuario local");
+    const collectionDenied = activityCollectionLabel(log.collection).toLowerCase();
+    const reason = cleanDenied(log.deniedReason || "Acao bloqueada.");
+    return `${actorDenied} teve uma acao negada em ${collectionDenied}. Motivo: ${reason}`;
+  }
   const action = activityActionLabel(log.action).toLowerCase();
   const clean = escaped ? escapeHtml : (value) => String(value || "");
   const record = clean(log.recordLabel || log.recordId || "registro");
