@@ -122,3 +122,29 @@ Criar um script de migracao `scripts/migrate-json-to-postgres.js` que:
 - Gere hashes quando necessario.
 - Insira dados respeitando a ordem de carga.
 - Emita um resumo final com contagens e inconsistencias.
+
+Status: script inicial criado.
+
+## Como executar o script inicial
+
+Validar o JSON sem aplicar no PostgreSQL:
+
+```bash
+node scripts/migrate-json-to-postgres.js --dry-run
+```
+
+Aplicar schema e dados usando `DATABASE_URL`:
+
+```bash
+set DATABASE_URL=postgres://usuario:senha@localhost:5432/fenix
+node scripts/migrate-json-to-postgres.js --apply --schema
+```
+
+Aplicar somente dados, assumindo que o schema ja existe:
+
+```bash
+set DATABASE_URL=postgres://usuario:senha@localhost:5432/fenix
+node scripts/migrate-json-to-postgres.js --apply
+```
+
+O script usa o cliente `psql`, portanto o executavel precisa estar disponivel no `PATH` do Windows.

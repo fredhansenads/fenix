@@ -50,6 +50,8 @@ O arquivo `docs/postgres-schema.sql` contem o primeiro desenho do schema Postgre
 
 O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
 
+O script `scripts/migrate-json-to-postgres.js` faz a primeira migracao assistida do JSON para PostgreSQL usando o cliente `psql`.
+
 ## API local
 
 Autenticacao local:
