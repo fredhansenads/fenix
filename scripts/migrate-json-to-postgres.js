@@ -71,6 +71,9 @@ Alternativa:
   PGDATABASE=fenix
   PGUSER=postgres
   PGPASSWORD=sua_senha
+
+Windows:
+  PSQL_PATH=C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe
 `);
 }
 
@@ -335,11 +338,27 @@ function runPsqlFile(filePath) {
   if (process.env.DATABASE_URL) {
     args.push(process.env.DATABASE_URL);
   }
-  const result = spawnSync("psql", args, {
+  const result = spawnSync(resolvePsqlCommand(), args, {
     stdio: "inherit",
-    shell: process.platform === "win32"
+    shell: false
   });
   if (result.status !== 0) {
     throw new Error(`psql falhou ao executar ${filePath}`);
   }
+}
+
+function resolvePsqlCommand() {
+  if (process.env.PSQL_PATH) {
+    return process.env.PSQL_PATH;
+  }
+
+  const windowsCandidates = [
+    "C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe",
+    "C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe",
+    "C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe",
+    "C:\\Program Files\\PostgreSQL\\15\\bin\\psql.exe",
+    "C:\\Program Files\\PostgreSQL\\14\\bin\\psql.exe"
+  ];
+  const candidate = windowsCandidates.find((item) => fs.existsSync(item));
+  return candidate || "psql";
 }

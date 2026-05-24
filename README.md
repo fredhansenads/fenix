@@ -52,6 +52,8 @@ O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeame
 
 O script `scripts/migrate-json-to-postgres.js` faz a primeira migracao assistida do JSON para PostgreSQL usando o cliente `psql`.
 
+No Windows, o migrador detecta caminhos comuns do PostgreSQL, incluindo `C:\Program Files\PostgreSQL\18\bin\psql.exe`. Tambem e possivel configurar manualmente com `PSQL_PATH`; veja `.env.example`.
+
 ## API local
 
 Autenticacao local:

@@ -148,3 +148,8 @@ node scripts/migrate-json-to-postgres.js --apply
 ```
 
 O script usa o cliente `psql`, portanto o executavel precisa estar disponivel no `PATH` do Windows.
+Se o `psql` nao estiver no `PATH`, configure `PSQL_PATH`. Exemplo:
+
+```bash
+set PSQL_PATH=C:\Program Files\PostgreSQL\18\bin\psql.exe
+```
