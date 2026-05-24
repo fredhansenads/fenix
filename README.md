@@ -48,6 +48,8 @@ O backend concentra leitura e escrita em uma camada simples de repositorio JSON.
 
 O arquivo `docs/postgres-schema.sql` contem o primeiro desenho do schema PostgreSQL, cobrindo os modulos atuais, relacionamentos, restricoes, auditoria e notificacoes lidas.
 
+O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
+
 ## API local
 
 Autenticacao local:
