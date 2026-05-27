@@ -55,6 +55,14 @@ O script `scripts/migrate-json-to-postgres.js` faz a primeira migracao assistida
 
 No Windows, o migrador detecta caminhos comuns do PostgreSQL, incluindo `C:\Program Files\PostgreSQL\18\bin\psql.exe`. Tambem e possivel configurar manualmente com `PSQL_PATH`; veja `.env.example`.
 
+Para popular o PostgreSQL com dados demonstrativos completos do ERP, use:
+
+```bash
+node scripts/seed-postgres-demo.js
+```
+
+Esse seed recria uma base de demonstracao com usuarios, clientes, fornecedores, categorias, contas a pagar, contas a receber, propostas, contratos, projetos e tarefas. Ele le o arquivo `.env` automaticamente.
+
 ## API local
 
 Autenticacao local:
