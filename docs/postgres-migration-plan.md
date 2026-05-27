@@ -12,6 +12,8 @@ Status em maio de 2026:
 - `.env.example` documenta as variaveis esperadas.
 - `scripts/migrate-json-to-postgres.js` existe para migracao assistida a partir de JSON.
 - `scripts/seed-postgres-demo.js` existe para popular dados demonstrativos completos.
+- `scripts/backup-postgres.js` gera backups SQL locais.
+- `scripts/restore-postgres.js` lista backups, simula restauracao e restaura com confirmacao explicita.
 - Painel `Configuracoes > Saude do sistema` consulta `GET /api/health` e confirma a persistencia ativa.
 - Tabela `user_sessions` registra sessoes persistentes com hash do token quando PostgreSQL esta ativo.
 
@@ -123,11 +125,13 @@ A carga deve respeitar dependencias entre tabelas:
 
 ## Estrategia de rollback
 
-1. Pausar o servidor.
-2. Restaurar o reposititorio JSON no backend.
-3. Restaurar `data/fenix-db.json` a partir do backup.
+1. Gerar ou localizar um backup SQL em `backups/`.
+2. Simular a restauracao com `node scripts/restore-postgres.js --latest` ou `--file`.
+3. Restaurar com `node scripts/restore-postgres.js --latest --apply --confirm=RESTORE`.
 4. Reiniciar `node server.js`.
-5. Validar login e dashboard.
+5. Validar login, painel de saude, dashboard e contagens principais.
+
+O script de restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. A restauracao limpa o schema `public`, portanto deve ser usada apenas quando a substituicao do banco atual for desejada.
 
 ## Proximo passo tecnico
 

@@ -52,6 +52,7 @@ docs/postgres-migration-plan.md    Plano tecnico de migracao
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
+scripts/restore-postgres.js        Restauracao assistida do PostgreSQL
 ```
 
 Arquivos sensiveis e dados locais nao devem ir para o Git:
@@ -289,7 +290,29 @@ backups/<database>-backup-<data>.sql
 
 Os backups ficam fora do Git por padrao. Recomenda-se gerar backup antes de migracoes, alteracoes estruturais no schema, limpeza de dados ou testes de carga.
 
-## 12. API local
+## 12. Restauracao local
+
+Para listar backups disponiveis:
+
+```powershell
+node scripts\restore-postgres.js --list
+```
+
+Para simular a restauracao mais recente, sem alterar o banco:
+
+```powershell
+node scripts\restore-postgres.js --latest
+```
+
+Para restaurar de verdade o backup mais recente:
+
+```powershell
+node scripts\restore-postgres.js --latest --apply --confirm=RESTORE
+```
+
+A restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. Em seguida, limpa o schema `public` e aplica o `.sql`. Esse fluxo e destrutivo para o banco atual e deve ser usado apenas quando a restauracao for realmente desejada.
+
+## 13. API local
 
 ### Autenticacao
 
@@ -348,7 +371,7 @@ Restrita a `admin` e `gestor`.
 
 Restrita a `admin` e `gestor`.
 
-## 13. Regras de negocio atuais
+## 14. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -361,7 +384,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 14. Indicadores e relatorios
+## 15. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -382,7 +405,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 15. Status da Fase 1
+## 16. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -399,7 +422,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 16. Status da Fase 2
+## 17. Status da Fase 2
 
 Fase 2 em andamento avancado:
 
@@ -415,20 +438,20 @@ Fase 2 em andamento avancado:
 - Sessoes persistentes no PostgreSQL.
 - Seed demonstrativo.
 - Backup local do PostgreSQL.
+- Restauracao assistida de backup.
 - Painel de saude do sistema.
 
-## 17. Proximas etapas recomendadas
+## 18. Proximas etapas recomendadas
 
-1. Evoluir sessao para armazenamento persistente em banco.
-2. Criar tabela propria de sessoes ou tokens.
-3. Modularizar carregamento inicial para depender menos de `/api/state`.
-4. Evoluir auditoria para consultas paginadas.
-5. Evoluir backup para restauracao assistida.
-6. Adicionar testes automatizados basicos.
-7. Preparar empacotamento de ambiente local.
-8. Iniciar automacoes da Fase 3.
+1. Modularizar carregamento inicial para depender menos de `/api/state`.
+2. Evoluir auditoria para consultas paginadas.
+3. Adicionar testes automatizados basicos.
+4. Revisar UX/UI final da Fase 2 em desktop e mobile.
+5. Consolidar checklist operacional de execucao, backup, restore e validacao.
+6. Preparar empacotamento de ambiente local.
+7. Iniciar automacoes da Fase 3.
 
-## 18. Criterios de sucesso
+## 19. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

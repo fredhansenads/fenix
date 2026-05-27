@@ -79,6 +79,24 @@ node scripts/backup-postgres.js
 
 Os arquivos sao criados em `backups/` e ficam fora do Git.
 
+Para listar backups disponiveis:
+
+```bash
+node scripts/restore-postgres.js --list
+```
+
+Para simular uma restauracao sem alterar o banco:
+
+```bash
+node scripts/restore-postgres.js --latest
+```
+
+Para restaurar de verdade o backup mais recente:
+
+```bash
+node scripts/restore-postgres.js --latest --apply --confirm=RESTORE
+```
+
 ## API local
 
 Autenticacao local:

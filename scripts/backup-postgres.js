@@ -76,7 +76,7 @@ function loadEnvFile(filePath) {
 }
 
 function buildPgDumpArgs(outputFile) {
-  const args = ["--format=plain", "--no-owner", "--no-privileges", "--file", outputFile];
+  const args = ["--format=plain", "--clean", "--if-exists", "--no-owner", "--no-privileges", "--file", outputFile];
   if (process.env.DATABASE_URL) {
     return [...args, process.env.DATABASE_URL];
   }
