@@ -176,7 +176,7 @@ async function handleApi(request, response, requestUrl) {
   }
 
   if (requestUrl.pathname === "/api/activity-log") {
-    await handleActivityLogApi(request, response);
+    await handleActivityLogApi(request, response, requestUrl);
     return;
   }
 
@@ -381,7 +381,7 @@ async function handleHealthApi(request, response) {
   }
 }
 
-async function handleActivityLogApi(request, response) {
+async function handleActivityLogApi(request, response, requestUrl) {
   if (request.method !== "GET") {
     sendJson(response, 405, { error: "Method not allowed" });
     return;
@@ -391,7 +391,32 @@ async function handleActivityLogApi(request, response) {
 
   const database = await readDatabase();
   const data = database.exists ? database.data : {};
-  sendJson(response, 200, Array.isArray(data.auditLogs) ? data.auditLogs : []);
+  const logs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
+  const params = requestUrl.searchParams;
+
+  const filters = {
+    query: params.get("query") || "",
+    action: params.get("action") || "",
+    collection: params.get("collection") || ""
+  };
+  const filteredLogs = filterActivityLogsForApi(logs, filters);
+  const exportAll = params.get("export") === "all";
+  const pageSize = exportAll ? filteredLogs.length || 1 : clampNumber(Number(params.get("pageSize") || 20), 5, 100);
+  const total = filteredLogs.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = exportAll ? 1 : clampNumber(Number(params.get("page") || 1), 1, totalPages);
+  const start = (page - 1) * pageSize;
+  const items = exportAll ? filteredLogs : filteredLogs.slice(start, start + pageSize);
+
+  sendJson(response, 200, {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    summary: summarizeActivityLogsForApi(filteredLogs),
+    collections: getActivityCollectionsForApi(logs)
+  });
 }
 
 async function handleCollectionApi(request, response, collection, id) {
@@ -768,6 +793,58 @@ function hasNotificationRead(reads, userId, notificationId) {
     const readNotificationId = read.notificationId || read.notification_id || "";
     return readNotificationId === notificationId && (!readUserId || readUserId === userId);
   });
+}
+
+function filterActivityLogsForApi(logs, filters) {
+  const query = normalizeSearchText(filters.query);
+  const action = filters.action;
+  const collection = filters.collection;
+  return logs
+    .slice()
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .filter((log) => {
+      const matchesAction = !action || log.action === action;
+      const matchesCollection = !collection || log.collection === collection;
+      const searchable = [
+        log.recordLabel,
+        log.recordId,
+        log.actorName,
+        log.actorRole,
+        log.metadata?.ip,
+        log.metadata?.userAgent,
+        log.deniedReason,
+        log.action,
+        log.collection,
+        Array.isArray(log.changedFields) ? log.changedFields.join(" ") : ""
+      ].join(" ");
+      const matchesQuery = !query || normalizeSearchText(searchable).includes(query);
+      return matchesAction && matchesCollection && matchesQuery;
+    });
+}
+
+function summarizeActivityLogsForApi(logs) {
+  return logs.reduce((summary, log) => {
+    summary[log.action] = (summary[log.action] || 0) + 1;
+    summary.total += 1;
+    return summary;
+  }, { total: 0, created: 0, updated: 0, deleted: 0, denied: 0 });
+}
+
+function getActivityCollectionsForApi(logs) {
+  return [...new Set(logs.map((log) => log.collection).filter(Boolean))].sort();
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
 }
 
 function normalizeRecord(collection, record) {

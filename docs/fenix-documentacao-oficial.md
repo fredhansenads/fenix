@@ -371,6 +371,17 @@ Colecoes suportadas:
 
 Restrita a `admin` e `gestor`.
 
+Parametros aceitos:
+
+- `page`
+- `pageSize`
+- `query`
+- `action`
+- `collection`
+- `export=all`
+
+A tela de Historico usa paginacao server-side para consultar volumes menores de eventos por vez.
+
 ### Notificacoes lidas
 
 - `GET /api/notification-reads`
@@ -447,6 +458,7 @@ Fase 2 em andamento avancado:
 - Exportacao de relatorios.
 - Melhorias de UX/UI.
 - Auditoria inicial.
+- Auditoria paginada.
 - PostgreSQL local integrado.
 - Sessoes persistentes no PostgreSQL.
 - Seed demonstrativo.
@@ -457,13 +469,12 @@ Fase 2 em andamento avancado:
 
 ## 18. Proximas etapas recomendadas
 
-1. Evoluir auditoria para consultas paginadas.
-2. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
-3. Adicionar testes automatizados basicos.
-4. Revisar UX/UI final da Fase 2 em desktop e mobile.
-5. Consolidar checklist operacional de execucao, backup, restore e validacao.
-6. Preparar empacotamento de ambiente local.
-7. Iniciar automacoes da Fase 3.
+1. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
+2. Adicionar testes automatizados basicos.
+3. Revisar UX/UI final da Fase 2 em desktop e mobile.
+4. Consolidar checklist operacional de execucao, backup, restore e validacao.
+5. Preparar empacotamento de ambiente local.
+6. Iniciar automacoes da Fase 3.
 
 ## 19. Criterios de sucesso
 

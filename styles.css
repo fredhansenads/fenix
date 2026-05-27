@@ -472,6 +472,38 @@ label {
   padding: 18px;
 }
 
+.panel-footer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: #fbfcfb;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pagination span,
+.pagination label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.pagination label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination select {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
 .finance-filters {
   display: flex;
   flex-wrap: wrap;

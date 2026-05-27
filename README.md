@@ -143,6 +143,7 @@ O historico de atividades pode ser consultado em:
 - `GET /api/activity-log`
 
 Esse endpoint exige usuario autenticado com perfil `admin` ou `gestor`, acompanhando a restricao ja aplicada na navegacao do frontend.
+Ele aceita paginacao e filtros por `page`, `pageSize`, `query`, `action` e `collection`.
 
 A verificacao de saude do sistema pode ser consultada em `GET /api/health`, tambem restrita a `admin` e `gestor`. Ela retorna o tipo de persistencia ativo, se a base esta inicializada e as contagens principais dos modulos.
 

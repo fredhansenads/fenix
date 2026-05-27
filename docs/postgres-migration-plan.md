@@ -18,6 +18,7 @@ Status em maio de 2026:
 - Tabela `user_sessions` registra sessoes persistentes com hash do token quando PostgreSQL esta ativo.
 - Rota `GET /api/bootstrap` carrega dados iniciais autenticados sem depender diretamente de `/api/state`.
 - Rotas `GET` e `POST /api/notification-reads` registram notificacoes lidas por usuario autenticado.
+- Rota `GET /api/activity-log` suporta paginacao e filtros server-side para auditoria.
 
 O JSON continua existindo como fallback tecnico, mas a persistencia local principal ja pode ser PostgreSQL quando o `.env` esta configurado.
 
@@ -121,6 +122,7 @@ A carga deve respeitar dependencias entre tabelas:
 - Contar registros por tabela e comparar com o JSON original.
 - Fazer login com `admin@santus.com`.
 - Abrir dashboard, clientes, financeiro, propostas, contratos, projetos, tarefas, relatorios e auditoria.
+- Validar auditoria com `GET /api/activity-log?page=1&pageSize=20`.
 - Criar, editar e excluir um registro de teste em modulo nao critico.
 - Confirmar que a auditoria registra o teste.
 - Confirmar que senhas nao aparecem em nenhuma resposta publica da API.

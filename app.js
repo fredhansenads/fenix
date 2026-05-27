@@ -95,6 +95,15 @@ let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
 const activityFilters = { query: "", action: "", collection: "" };
+const activityPaging = {
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  totalPages: 1,
+  summary: { total: 0, created: 0, updated: 0, deleted: 0, denied: 0 },
+  collections: [],
+  loadedFromApi: false
+};
 const notificationFilters = { status: "unread" };
 const reportFilters = { from: "", to: "" };
 let lastApiError = null;
@@ -2180,11 +2189,13 @@ async function markNotificationRead(id, shouldRender = true) {
 
 function renderActivity() {
   const logs = Array.isArray(state.auditLogs) ? state.auditLogs : [];
-  const filteredLogs = filterActivityLogs(logs);
-  const summary = summarizeActivityLogs(logs);
+  const visibleLogs = getVisibleActivityLogs(logs);
+  const totalCount = getActivityTotalCount(logs);
+  const summary = getActivitySummary(logs);
+  const collections = activityPaging.loadedFromApi && activityPaging.collections.length ? activityPaging.collections : getActivityCollections(logs);
   content.innerHTML = `
     <section class="grid kpi-grid">
-      ${activityKpi("Atividades", "total", logs.length, logs.length ? "neutral" : "success")}
+      ${activityKpi("Atividades", "total", summary.total || totalCount, totalCount ? "neutral" : "success")}
       ${activityKpi("Criacoes", "created", summary.created, "success")}
       ${activityKpi("Edicoes", "updated", summary.updated, "warning")}
       ${activityKpi("Exclusoes", "deleted", summary.deleted, summary.deleted ? "danger" : "success")}
@@ -2193,7 +2204,7 @@ function renderActivity() {
     <section class="toolbar">
       <div>
         <p class="eyebrow">Auditoria</p>
-        <h3 data-activity-title>${activityTitle(filteredLogs.length, logs.length)}</h3>
+        <h3 data-activity-title>${activityTitle(visibleLogs.length, totalCount)}</h3>
       </div>
       <div class="toolbar-actions">
         <button type="button" class="secondary" data-refresh-activity>Atualizar</button>
@@ -2218,14 +2229,18 @@ function renderActivity() {
           Modulo
           <select data-activity-collection>
             <option value="">Todos</option>
-            ${getActivityCollections(logs).map((collection) => `<option value="${collection}" ${activityFilters.collection === collection ? "selected" : ""}>${activityCollectionLabel(collection)}</option>`).join("")}
+            ${collections.map((collection) => `<option value="${collection}" ${activityFilters.collection === collection ? "selected" : ""}>${activityCollectionLabel(collection)}</option>`).join("")}
           </select>
         </label>
       </div>
     </section>
     <section class="panel">
-      <div class="panel-header"><h3>Eventos recentes</h3><span class="status neutral" data-activity-counter>${filteredLogs.length} de ${logs.length}</span></div>
-      <div class="panel-body table-wrap" data-activity-table>${renderActivityTable(filteredLogs)}</div>
+      <div class="panel-header">
+        <h3>Eventos recentes</h3>
+        <span class="status neutral" data-activity-counter>${activityCounterText(visibleLogs.length, totalCount)}</span>
+      </div>
+      <div class="panel-body table-wrap" data-activity-table>${renderActivityTable(visibleLogs)}</div>
+      <div class="panel-footer" data-activity-pagination>${renderActivityPagination()}</div>
     </section>
   `;
   bindActivity();
@@ -2241,53 +2256,74 @@ function bindActivity() {
   content.querySelector("[data-export-activity]")?.addEventListener("click", exportActivityCsv);
   content.querySelector("[data-activity-search]")?.addEventListener("input", (event) => {
     activityFilters.query = event.target.value;
-    refreshActivityView();
+    activityPaging.page = 1;
+    refreshActivityLog();
   });
   content.querySelector("[data-activity-action]")?.addEventListener("change", (event) => {
     activityFilters.action = event.target.value;
-    refreshActivityView();
+    activityPaging.page = 1;
+    refreshActivityLog();
   });
   content.querySelector("[data-activity-collection]")?.addEventListener("change", (event) => {
     activityFilters.collection = event.target.value;
-    refreshActivityView();
+    activityPaging.page = 1;
+    refreshActivityLog();
   });
   content.querySelector("[data-clear-activity-filters]")?.addEventListener("click", () => {
     activityFilters.query = "";
     activityFilters.action = "";
     activityFilters.collection = "";
+    activityPaging.page = 1;
     renderActivity();
   });
+  bindActivityPagination();
 }
 
 async function refreshActivityLog() {
-  const logs = await loadActivityLog();
-  if (!logs) {
+  const result = await loadActivityLog();
+  if (!result) {
     if (lastApiError) {
       if (lastApiError.status === 401) return;
       toast(apiErrorMessage("Nao foi possivel atualizar o historico."));
     }
     return;
   }
-  state.auditLogs = logs;
+  if (Array.isArray(result)) {
+    activityPaging.loadedFromApi = false;
+    state.auditLogs = result;
+  } else {
+    activityPaging.loadedFromApi = true;
+    activityPaging.page = result.page || 1;
+    activityPaging.pageSize = result.pageSize || activityPaging.pageSize;
+    activityPaging.total = result.total || 0;
+    activityPaging.totalPages = result.totalPages || 1;
+    activityPaging.summary = result.summary || { total: result.total || 0, created: 0, updated: 0, deleted: 0, denied: 0 };
+    activityPaging.collections = Array.isArray(result.collections) ? result.collections : [];
+    state.auditLogs = Array.isArray(result.items) ? result.items : [];
+  }
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   refreshActivityView();
 }
 
 function refreshActivityView() {
   const logs = Array.isArray(state.auditLogs) ? state.auditLogs : [];
-  const filteredLogs = filterActivityLogs(logs);
-  const summary = summarizeActivityLogs(logs);
+  const visibleLogs = getVisibleActivityLogs(logs);
+  const totalCount = getActivityTotalCount(logs);
+  const summary = getActivitySummary(logs);
   const table = content.querySelector("[data-activity-table]");
   const title = content.querySelector("[data-activity-title]");
   const counter = content.querySelector("[data-activity-counter]");
-  if (table) table.innerHTML = renderActivityTable(filteredLogs);
-  if (title) title.textContent = activityTitle(filteredLogs.length, logs.length);
-  if (counter) counter.textContent = `${filteredLogs.length} de ${logs.length}`;
-  updateActivitySummary("total", logs.length);
+  const pagination = content.querySelector("[data-activity-pagination]");
+  if (table) table.innerHTML = renderActivityTable(visibleLogs);
+  if (title) title.textContent = activityTitle(visibleLogs.length, totalCount);
+  if (counter) counter.textContent = activityCounterText(visibleLogs.length, totalCount);
+  if (pagination) pagination.innerHTML = renderActivityPagination();
+  updateActivitySummary("total", summary.total || totalCount);
   updateActivitySummary("created", summary.created);
   updateActivitySummary("updated", summary.updated);
   updateActivitySummary("deleted", summary.deleted);
   updateActivitySummary("denied", summary.denied);
+  bindActivityPagination();
 }
 
 function updateActivitySummary(key, value) {
@@ -2295,16 +2331,72 @@ function updateActivitySummary(key, value) {
   if (element) element.textContent = value;
 }
 
+function getVisibleActivityLogs(logs) {
+  return activityPaging.loadedFromApi ? logs : filterActivityLogs(logs);
+}
+
+function getActivityTotalCount(logs) {
+  return activityPaging.loadedFromApi ? activityPaging.total : logs.length;
+}
+
+function getActivitySummary(logs) {
+  return activityPaging.loadedFromApi ? activityPaging.summary : summarizeActivityLogs(logs);
+}
+
 function activityTitle(filteredCount, totalCount) {
   const label = totalCount === 1 ? "atividade registrada" : "atividades registradas";
   return filteredCount === totalCount ? `${totalCount} ${label}` : `${filteredCount} de ${totalCount} ${label}`;
 }
 
+function activityCounterText(visibleCount, totalCount) {
+  if (!activityPaging.loadedFromApi) {
+    return `${visibleCount} de ${totalCount}`;
+  }
+  return `Pagina ${activityPaging.page} de ${activityPaging.totalPages} · ${totalCount} evento${totalCount === 1 ? "" : "s"}`;
+}
+
+function renderActivityPagination() {
+  if (!activityPaging.loadedFromApi) {
+    return "";
+  }
+
+  return `
+    <div class="pagination">
+      <button type="button" class="secondary" data-activity-page="${activityPaging.page - 1}" ${activityPaging.page <= 1 ? "disabled" : ""}>Anterior</button>
+      <span>Pagina ${activityPaging.page} de ${activityPaging.totalPages}</span>
+      <label>
+        Itens
+        <select data-activity-page-size>
+          ${[10, 20, 50, 100].map((size) => `<option value="${size}" ${activityPaging.pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+        </select>
+      </label>
+      <button type="button" class="secondary" data-activity-page="${activityPaging.page + 1}" ${activityPaging.page >= activityPaging.totalPages ? "disabled" : ""}>Proxima</button>
+    </div>
+  `;
+}
+
+function bindActivityPagination() {
+  content.querySelectorAll("[data-activity-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const page = Number(button.dataset.activityPage);
+      if (!Number.isFinite(page) || page < 1 || page > activityPaging.totalPages) return;
+      activityPaging.page = page;
+      refreshActivityLog();
+    });
+  });
+  content.querySelector("[data-activity-page-size]")?.addEventListener("change", (event) => {
+    activityPaging.pageSize = Number(event.target.value) || 20;
+    activityPaging.page = 1;
+    refreshActivityLog();
+  });
+}
+
 function summarizeActivityLogs(logs) {
   return logs.reduce((summary, log) => {
     summary[log.action] = (summary[log.action] || 0) + 1;
+    summary.total += 1;
     return summary;
-  }, { created: 0, updated: 0, deleted: 0, denied: 0 });
+  }, { total: 0, created: 0, updated: 0, deleted: 0, denied: 0 });
 }
 
 function filterActivityLogs(logs) {
@@ -2334,8 +2426,11 @@ function getActivityCollections(logs) {
     .sort((a, b) => activityCollectionLabel(a).localeCompare(activityCollectionLabel(b), "pt-BR"));
 }
 
-function exportActivityCsv() {
-  const logs = filterActivityLogs(Array.isArray(state.auditLogs) ? state.auditLogs : []);
+async function exportActivityCsv() {
+  const apiLogs = await loadActivityLog({ exportAll: true });
+  const logs = Array.isArray(apiLogs?.items)
+    ? apiLogs.items
+    : filterActivityLogs(Array.isArray(state.auditLogs) ? state.auditLogs : []);
   if (!logs.length) {
     toast("Nao ha dados para exportar.");
     return;
@@ -2357,12 +2452,23 @@ function exportActivityCsv() {
   toast("Auditoria exportada.");
 }
 
-async function loadActivityLog() {
+async function loadActivityLog(options = {}) {
   if (!location.protocol.startsWith("http")) {
     return null;
   }
 
-  return apiRequest("/api/activity-log", { method: "GET", cache: "no-store" });
+  const params = new URLSearchParams();
+  if (activityFilters.query) params.set("query", activityFilters.query);
+  if (activityFilters.action) params.set("action", activityFilters.action);
+  if (activityFilters.collection) params.set("collection", activityFilters.collection);
+  if (options.exportAll) {
+    params.set("export", "all");
+  } else {
+    params.set("page", String(activityPaging.page));
+    params.set("pageSize", String(activityPaging.pageSize));
+  }
+
+  return apiRequest(`/api/activity-log?${params.toString()}`, { method: "GET", cache: "no-store" });
 }
 
 function renderActivityTable(logs) {
