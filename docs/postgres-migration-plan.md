@@ -1,6 +1,20 @@
 # Plano de migracao para PostgreSQL
 
-Este documento descreve como migrar o FENIX do arquivo `data/fenix-db.json` para o schema PostgreSQL definido em `docs/postgres-schema.sql`.
+Este documento descreve como migrar o FÊNIX do arquivo `data/fenix-db.json` para o schema PostgreSQL definido em `docs/postgres-schema.sql`.
+
+## Status atual
+
+Status em maio de 2026:
+
+- Banco local `fenix` criado no PostgreSQL.
+- Schema `docs/postgres-schema.sql` aplicado.
+- Backend alterna automaticamente entre PostgreSQL e JSON conforme `.env`.
+- `.env.example` documenta as variaveis esperadas.
+- `scripts/migrate-json-to-postgres.js` existe para migracao assistida a partir de JSON.
+- `scripts/seed-postgres-demo.js` existe para popular dados demonstrativos completos.
+- Painel `Configuracoes > Saude do sistema` consulta `GET /api/health` e confirma a persistencia ativa.
+
+O JSON continua existindo como fallback tecnico, mas a persistencia local principal ja pode ser PostgreSQL quando o `.env` esta configurado.
 
 ## Objetivo
 
@@ -17,7 +31,7 @@ Este documento descreve como migrar o FENIX do arquivo `data/fenix-db.json` para
 4. Validar contagens por tabela.
 5. Validar login do usuario administrador.
 6. Validar leitura das rotas modulares.
-7. Alternar o reposititorio do backend de JSON para PostgreSQL.
+7. Alternar o repositorio do backend de JSON para PostgreSQL.
 8. Manter o JSON congelado como backup temporario.
 9. Remover a dependencia do endpoint `/api/state` apos a API modular cobrir todo o carregamento inicial.
 
@@ -114,7 +128,7 @@ A carga deve respeitar dependencias entre tabelas:
 
 ## Proximo passo tecnico
 
-Criar um script de migracao `scripts/migrate-json-to-postgres.js` que:
+Evoluir a persistencia PostgreSQL para reduzir a dependencia do endpoint `/api/state` e aproximar a API do modelo modular definitivo. O script `scripts/migrate-json-to-postgres.js` ja foi criado para:
 
 - Leia `data/fenix-db.json`.
 - Valide colecoes esperadas.
@@ -123,7 +137,7 @@ Criar um script de migracao `scripts/migrate-json-to-postgres.js` que:
 - Insira dados respeitando a ordem de carga.
 - Emita um resumo final com contagens e inconsistencias.
 
-Status: script inicial criado.
+Status: script inicial criado. Seed demonstrativo PostgreSQL tambem disponivel em `scripts/seed-postgres-demo.js`.
 
 ## Como executar o script inicial
 

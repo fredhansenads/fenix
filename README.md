@@ -2,6 +2,14 @@
 
 Este repositorio contem o primeiro MVP web do FÊNIX, o ERP da SANTUS.
 
+## Documentacao oficial
+
+A documentacao consolidada do sistema esta em:
+
+- `docs/fenix-documentacao-oficial.md`
+
+Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, status das fases e proximas etapas recomendadas.
+
 ## Como abrir
 
 Opcao simples: abra o arquivo `index.html` no navegador.
@@ -51,7 +59,7 @@ O arquivo `docs/postgres-schema.sql` contem o schema PostgreSQL inicial, cobrind
 
 O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
 
-O script `scripts/migrate-json-to-postgres.js` faz a primeira migracao assistida do JSON para PostgreSQL usando o cliente `psql`.
+O script `scripts/migrate-json-to-postgres.js` faz a migracao assistida do JSON para PostgreSQL usando o cliente `psql`.
 
 No Windows, o migrador detecta caminhos comuns do PostgreSQL, incluindo `C:\Program Files\PostgreSQL\18\bin\psql.exe`. Tambem e possivel configurar manualmente com `PSQL_PATH`; veja `.env.example`.
 
@@ -142,4 +150,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e substituir o arquivo JSON por banco PostgreSQL e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo.
+A proxima etapa recomendada e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo e reduzir gradualmente a dependencia do endpoint `/api/state`.
