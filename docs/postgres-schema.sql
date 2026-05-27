@@ -161,6 +161,16 @@ CREATE TABLE notification_reads (
   UNIQUE (user_id, notification_id)
 );
 
+CREATE TABLE user_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  user_name TEXT NOT NULL,
+  user_role TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE INDEX idx_clients_status ON clients(status);
 CREATE INDEX idx_payables_status_due_date ON payables(status, due_date);
 CREATE INDEX idx_receivables_status_due_date ON receivables(status, due_date);
@@ -170,3 +180,5 @@ CREATE INDEX idx_projects_status_due_date ON projects(status, due_date);
 CREATE INDEX idx_tasks_status_due_date ON tasks(status, due_date);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_collection_action ON audit_logs(collection, action);
+CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);

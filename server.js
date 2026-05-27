@@ -213,6 +213,14 @@ async function handleLoginApi(request, response) {
     role: user.role,
     expiresAt
   });
+  if (databaseRepository.saveSession) {
+    await databaseRepository.saveSession(token, {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      expiresAt
+    });
+  }
 
   sendJson(response, 200, {
     token,
@@ -230,6 +238,9 @@ async function handleLogoutApi(request, response) {
   const token = getRequestToken(request);
   if (token) {
     sessions.delete(token);
+    if (databaseRepository.deleteSession) {
+      await databaseRepository.deleteSession(token);
+    }
   }
   sendJson(response, 200, { ok: true });
 }
@@ -238,7 +249,7 @@ async function handleStateApi(request, response) {
   const database = await readDatabase();
 
   if (request.method === "GET") {
-    if (database.exists && !authorizeSessionRoles(request, response, ["admin"])) return;
+    if (database.exists && !(await authorizeSessionRoles(request, response, ["admin"]))) return;
     sendJson(response, database.exists ? 200 : 404, database.exists ? sanitizeState(database.data) : { error: "Database not initialized" });
     return;
   }
@@ -246,7 +257,7 @@ async function handleStateApi(request, response) {
   if (request.method === "PUT") {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    if (database.exists && !authorizeSessionRoles(request, response, ["admin"])) return;
+    if (database.exists && !(await authorizeSessionRoles(request, response, ["admin"]))) return;
     const currentLog = database.exists && Array.isArray(database.data.auditLogs) ? database.data.auditLogs : [];
     const payloadLog = Array.isArray(payload.auditLogs) ? payload.auditLogs : [];
     const nextPayload = prepareDatabasePayload({
@@ -267,7 +278,7 @@ async function handleHealthApi(request, response) {
     return;
   }
 
-  if (!authorizeSessionRoles(request, response, ["admin", "gestor"])) return;
+  if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
 
   try {
     const database = await readDatabase();
@@ -296,7 +307,7 @@ async function handleActivityLogApi(request, response) {
     return;
   }
 
-  if (!authorizeSessionRoles(request, response, ["admin", "gestor"])) return;
+  if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
 
   const database = await readDatabase();
   const data = database.exists ? database.data : {};
@@ -320,7 +331,7 @@ async function handleCollectionApi(request, response, collection, id) {
   }
 
   if (request.method === "POST") {
-    if (!authorizeAction(request, response, collection, "create", data)) {
+    if (!(await authorizeAction(request, response, collection, "create", data))) {
       await writeDatabase(data);
       return;
     }
@@ -333,14 +344,14 @@ async function handleCollectionApi(request, response, collection, id) {
       return;
     }
     data[collection].push(prepareRecordForStorage(collection, item));
-    const auditLog = addActivityLog(data, request, "created", collection, item);
+    const auditLog = await addActivityLog(data, request, "created", collection, item);
     await writeDatabase(data);
     sendJson(response, 201, { ...sanitizeRecord(collection, item), auditLog });
     return;
   }
 
   if (request.method === "PUT" && id) {
-    if (!authorizeAction(request, response, collection, "edit", data)) {
+    if (!(await authorizeAction(request, response, collection, "edit", data))) {
       await writeDatabase(data);
       return;
     }
@@ -359,14 +370,14 @@ async function handleCollectionApi(request, response, collection, id) {
       return;
     }
     data[collection][index] = prepareRecordForStorage(collection, item, previousItem);
-    const auditLog = addActivityLog(data, request, "updated", collection, item, previousItem);
+    const auditLog = await addActivityLog(data, request, "updated", collection, item, previousItem);
     await writeDatabase(data);
     sendJson(response, 200, { ...sanitizeRecord(collection, data[collection][index]), auditLog });
     return;
   }
 
   if (request.method === "DELETE" && id) {
-    if (!authorizeAction(request, response, collection, "delete", data)) {
+    if (!(await authorizeAction(request, response, collection, "delete", data))) {
       await writeDatabase(data);
       return;
     }
@@ -377,7 +388,7 @@ async function handleCollectionApi(request, response, collection, id) {
       sendJson(response, 404, { error: "Record not found" });
       return;
     }
-    const auditLog = addActivityLog(data, request, "deleted", collection, item);
+    const auditLog = await addActivityLog(data, request, "deleted", collection, item);
     await writeDatabase(data);
     sendJson(response, 200, { ok: true, auditLog });
     return;
@@ -386,10 +397,10 @@ async function handleCollectionApi(request, response, collection, id) {
   sendJson(response, 405, { error: "Method not allowed" });
 }
 
-function authorizeAction(request, response, collection, action, data = null) {
-  const authentication = authenticateActor(request);
+async function authorizeAction(request, response, collection, action, data = null) {
+  const authentication = await authenticateActor(request);
   if (!authentication.valid) {
-    addDeniedActivityLog(data, request, collection, action, "Sessao invalida ou expirada.");
+    await addDeniedActivityLog(data, request, collection, action, "Sessao invalida ou expirada.");
     sendUnauthorized(response);
     return false;
   }
@@ -399,7 +410,7 @@ function authorizeAction(request, response, collection, action, data = null) {
   if (!allowedRoles || allowedRoles.includes(actor.role)) {
     return true;
   }
-  addDeniedActivityLog(data, request, collection, action, "Perfil sem permissao para executar esta acao.");
+  await addDeniedActivityLog(data, request, collection, action, "Perfil sem permissao para executar esta acao.");
   sendJson(response, 403, {
     error: "Forbidden",
     message: "Perfil sem permissao para executar esta acao.",
@@ -409,7 +420,7 @@ function authorizeAction(request, response, collection, action, data = null) {
   return false;
 }
 
-function addDeniedActivityLog(data, request, collection, action, reason) {
+async function addDeniedActivityLog(data, request, collection, action, reason) {
   if (!data) return null;
   return addActivityLog(data, request, "denied", collection, {
     id: `${collection}:${action}`,
@@ -420,8 +431,8 @@ function addDeniedActivityLog(data, request, collection, action, reason) {
   });
 }
 
-function authorizeRoles(request, response, allowedRoles) {
-  const authentication = authenticateActor(request);
+async function authorizeRoles(request, response, allowedRoles) {
+  const authentication = await authenticateActor(request);
   if (!authentication.valid) {
     sendUnauthorized(response);
     return false;
@@ -438,8 +449,8 @@ function authorizeRoles(request, response, allowedRoles) {
   return false;
 }
 
-function authorizeSessionRoles(request, response, allowedRoles) {
-  const session = getSessionFromRequest(request);
+async function authorizeSessionRoles(request, response, allowedRoles) {
+  const session = await getSessionFromRequest(request);
   if (!session) {
     sendUnauthorized(response);
     return false;
@@ -463,8 +474,8 @@ function sendUnauthorized(response) {
   });
 }
 
-function addActivityLog(data, request, action, collection, item, previousItem = null, extra = {}) {
-  const actor = getActor(request);
+async function addActivityLog(data, request, action, collection, item, previousItem = null, extra = {}) {
+  const actor = await getActor(request);
   const auditLog = {
     id: createId(),
     action,
@@ -502,8 +513,8 @@ function getRequestIp(request) {
   return request.socket?.remoteAddress || "";
 }
 
-function getActor(request) {
-  const authentication = authenticateActor(request);
+async function getActor(request) {
+  const authentication = await authenticateActor(request);
   if (authentication.valid) {
     return authentication.actor;
   }
@@ -511,8 +522,8 @@ function getActor(request) {
   return getHeaderActor(request);
 }
 
-function authenticateActor(request) {
-  const session = getSessionFromRequest(request);
+async function authenticateActor(request) {
+  const session = await getSessionFromRequest(request);
   if (session) {
     return {
       valid: true,
@@ -539,15 +550,20 @@ function getHeaderActor(request) {
   };
 }
 
-function getSessionFromRequest(request) {
+async function getSessionFromRequest(request) {
   const token = getRequestToken(request);
   if (!token) return null;
 
   const session = sessions.get(token);
-  if (!session) return null;
+  if (!session) {
+    return databaseRepository.findSessionByToken ? databaseRepository.findSessionByToken(token) : null;
+  }
 
   if (new Date(session.expiresAt).getTime() <= Date.now()) {
     sessions.delete(token);
+    if (databaseRepository.deleteSession) {
+      databaseRepository.deleteSession(token).catch(() => {});
+    }
     return null;
   }
 
@@ -619,6 +635,10 @@ function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
   return `scrypt$${salt}$${hash}`;
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
 }
 
 function verifyPassword(password, user) {
@@ -769,6 +789,11 @@ function createJsonDatabaseRepository(filePath) {
     async write(payload) {
       await fsp.mkdir(directory, { recursive: true });
       await fsp.writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
+    },
+    async saveSession() {},
+    async deleteSession() {},
+    async findSessionByToken() {
+      return null;
     }
   };
 }
@@ -791,6 +816,49 @@ function createPostgresDatabaseRepository() {
     },
     async write(payload) {
       await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresWriteSql(payload));
+    },
+    async saveSession(token, session) {
+      await runPsql(["-v", "ON_ERROR_STOP=1"], `
+INSERT INTO user_sessions (id, user_id, token_hash, user_name, user_role, expires_at)
+VALUES (${sqlLiteral(createId())}, ${sqlLiteral(session.id)}, ${sqlLiteral(hashToken(token))}, ${sqlLiteral(session.name)}, ${sqlLiteral(session.role)}, ${sqlLiteral(session.expiresAt)}::timestamptz)
+ON CONFLICT (token_hash) DO UPDATE SET
+  user_id = EXCLUDED.user_id,
+  user_name = EXCLUDED.user_name,
+  user_role = EXCLUDED.user_role,
+  expires_at = EXCLUDED.expires_at;
+DELETE FROM user_sessions WHERE expires_at <= now();
+`);
+    },
+    async deleteSession(token) {
+      await runPsql(["-v", "ON_ERROR_STOP=1"], `
+DELETE FROM user_sessions WHERE token_hash = ${sqlLiteral(hashToken(token))} OR expires_at <= now();
+`);
+    },
+    async findSessionByToken(token) {
+      const output = await runPsql([
+        "-t",
+        "-A",
+        "-c",
+        `
+DELETE FROM user_sessions WHERE expires_at <= now();
+SELECT COALESCE((
+  SELECT jsonb_build_object(
+    'id', user_id,
+    'name', user_name,
+    'role', user_role,
+    'expiresAt', expires_at
+  )::text
+  FROM user_sessions
+  WHERE token_hash = ${sqlLiteral(hashToken(token))}
+  LIMIT 1
+), '');
+`
+      ]);
+      const content = output.trim();
+      if (!content) return null;
+      const session = JSON.parse(content);
+      sessions.set(token, session);
+      return session;
     }
   };
 }
@@ -1038,6 +1106,10 @@ INSERT INTO notification_reads (id, user_id, notification_id, read_at)
 SELECT record->>'id', NULLIF(record->>'userId', ''), record->>'notificationId', COALESCE(NULLIF(record->>'readAt', '')::timestamptz, now())
 FROM payload, jsonb_array_elements(COALESCE(data->'notificationReads', '[]'::jsonb)) AS record;
 
+DELETE FROM user_sessions
+WHERE expires_at <= now()
+  OR user_id NOT IN (SELECT id FROM users);
+
 COMMIT;
 `;
 }
@@ -1053,6 +1125,11 @@ async function parseJsonBody(request, response) {
 
 function createId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function sqlLiteral(value) {
+  if (value === null || value === undefined) return "NULL";
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 const server = http.createServer((request, response) => {

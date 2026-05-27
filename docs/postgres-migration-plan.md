@@ -13,6 +13,7 @@ Status em maio de 2026:
 - `scripts/migrate-json-to-postgres.js` existe para migracao assistida a partir de JSON.
 - `scripts/seed-postgres-demo.js` existe para popular dados demonstrativos completos.
 - Painel `Configuracoes > Saude do sistema` consulta `GET /api/health` e confirma a persistencia ativa.
+- Tabela `user_sessions` registra sessoes persistentes com hash do token quando PostgreSQL esta ativo.
 
 O JSON continua existindo como fallback tecnico, mas a persistencia local principal ja pode ser PostgreSQL quando o `.env` esta configurado.
 
@@ -51,6 +52,7 @@ A carga deve respeitar dependencias entre tabelas:
 10. `receivables`
 11. `audit_logs`
 12. `notification_reads`
+13. `user_sessions`
 
 `receivables` deve entrar depois de `proposals`, porque pode referenciar `proposal_id`.
 
@@ -70,6 +72,7 @@ A carga deve respeitar dependencias entre tabelas:
 | `tasks` | `tasks` | `projectId`, `responsibleId`, `dueDate`, `completedAt` mudam para snake_case. |
 | `auditLogs` | `audit_logs` | `changedFields` e `metadata` viram JSONB. |
 | `notificationReads` | `notification_reads` | Hoje e lista simples; na migracao deve ser vinculada ao usuario quando houver sessao conhecida. |
+| sessoes da API | `user_sessions` | Sessoes novas sao criadas pelo login; nao e necessario migrar sessoes antigas do JSON. |
 
 ## Cuidados por modulo
 

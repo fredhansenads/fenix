@@ -246,6 +246,7 @@ Tabelas principais:
 - `tasks`
 - `audit_logs`
 - `notification_reads`
+- `user_sessions`
 
 O arquivo `.env` local deve seguir o modelo de `.env.example`. Credenciais reais nao devem ser commitadas.
 
@@ -301,6 +302,8 @@ O login retorna token temporario em memoria. O frontend envia:
 Authorization: Bearer <token>
 ```
 
+Quando PostgreSQL esta ativo, a sessao tambem e registrada na tabela `user_sessions` usando hash SHA-256 do token. Isso permite validar sessoes mesmo depois de reiniciar o servidor local, sem salvar o token puro no banco.
+
 ### Estado completo
 
 - `GET /api/state`
@@ -349,6 +352,7 @@ Restrita a `admin` e `gestor`.
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
+- Tokens de sessao sao armazenados no PostgreSQL apenas como hash SHA-256.
 - Respostas publicas nao retornam senha nem hash.
 - Valores financeiros devem ser maiores que zero.
 - Datas devem usar formato `AAAA-MM-DD`.
@@ -408,6 +412,7 @@ Fase 2 em andamento avancado:
 - Melhorias de UX/UI.
 - Auditoria inicial.
 - PostgreSQL local integrado.
+- Sessoes persistentes no PostgreSQL.
 - Seed demonstrativo.
 - Backup local do PostgreSQL.
 - Painel de saude do sistema.
