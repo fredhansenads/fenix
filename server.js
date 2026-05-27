@@ -160,6 +160,11 @@ async function handleApi(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/health") {
+    await handleHealthApi(request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/activity-log") {
     await handleActivityLogApi(request, response);
     return;
@@ -254,6 +259,35 @@ async function handleStateApi(request, response) {
   }
 
   sendJson(response, 405, { error: "Method not allowed" });
+}
+
+async function handleHealthApi(request, response) {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  if (!authorizeSessionRoles(request, response, ["admin", "gestor"])) return;
+
+  try {
+    const database = await readDatabase();
+    const data = database.exists ? database.data : {};
+    sendJson(response, 200, {
+      ok: true,
+      source: databaseRepository.source,
+      databaseInitialized: database.exists,
+      checkedAt: new Date().toISOString(),
+      counts: summarizeCollections(data)
+    });
+  } catch (error) {
+    sendJson(response, 500, {
+      ok: false,
+      source: databaseRepository.source,
+      checkedAt: new Date().toISOString(),
+      message: "Falha ao verificar a persistencia do sistema.",
+      detail: error.message
+    });
+  }
 }
 
 async function handleActivityLogApi(request, response) {
@@ -608,6 +642,13 @@ function getChangedFields(previousItem, item) {
   return [...fields].filter((field) => JSON.stringify(previousItem[field]) !== JSON.stringify(item[field]));
 }
 
+function summarizeCollections(data) {
+  return [...collections, "auditLogs", "notificationReads"].reduce((summary, collection) => {
+    summary[collection] = Array.isArray(data?.[collection]) ? data[collection].length : 0;
+    return summary;
+  }, {});
+}
+
 function normalizeRecord(collection, record) {
   const rules = validationRules[collection] || {};
   const normalized = {};
@@ -713,6 +754,7 @@ function loadEnvFile(filePath) {
 function createJsonDatabaseRepository(filePath) {
   const directory = path.dirname(filePath);
   return {
+    source: "json",
     async read() {
       try {
         const content = (await fsp.readFile(filePath, "utf-8")).replace(/^\uFEFF/, "");
@@ -733,6 +775,7 @@ function createJsonDatabaseRepository(filePath) {
 
 function createPostgresDatabaseRepository() {
   return {
+    source: "postgres",
     async read() {
       const payload = await runPsql([
         "-t",

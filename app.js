@@ -1,5 +1,6 @@
 const STORE_KEY = "santus_erp_mvp";
 const API_STATE_URL = "/api/state";
+const API_HEALTH_URL = "/api/health";
 const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
 const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
@@ -2425,6 +2426,18 @@ function renderSettings() {
         <button type="button" class="secondary" id="seedButton">Restaurar dados demonstrativos</button>
       </div>
     </section>
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Saude do sistema</h3>
+          <span class="panel-subtitle">API local, persistencia e volume de registros</span>
+        </div>
+        <button type="button" class="secondary" id="healthRefreshButton">Atualizar</button>
+      </div>
+      <div class="panel-body" id="healthStatus">
+        ${renderHealthStatus()}
+      </div>
+    </section>
   `;
   document.querySelector("#seedButton").addEventListener("click", () => {
     state = structuredClone(initialData);
@@ -2434,6 +2447,60 @@ function renderSettings() {
     toast("Dados demonstrativos restaurados.");
     navigate("dashboard");
   });
+  document.querySelector("#healthRefreshButton").addEventListener("click", loadHealthStatus);
+  loadHealthStatus();
+}
+
+function renderHealthStatus(health = null) {
+  if (!health) {
+    return `<p class="empty-state">Verificando conexao com a API local...</p>`;
+  }
+
+  if (!health.ok) {
+    return `
+      <div class="health-summary">
+        <span class="status danger">Falha</span>
+        <strong>${escapeHtml(health.message || "Nao foi possivel verificar o sistema.")}</strong>
+        <p>${escapeHtml(health.detail || "Confira se o servidor local e o PostgreSQL estao ativos.")}</p>
+      </div>
+    `;
+  }
+
+  const counts = health.counts || {};
+  const keyCounts = ["users", "clients", "suppliers", "proposals", "contracts", "projects", "tasks", "payables", "receivables"];
+  return `
+    <div class="health-summary">
+      <span class="status success">Operacional</span>
+      <strong>Persistencia: ${health.source === "postgres" ? "PostgreSQL" : "JSON local"}</strong>
+      <p>Ultima verificacao: ${formatDateTime(health.checkedAt)}</p>
+    </div>
+    <div class="health-grid">
+      ${keyCounts.map((key) => `
+        <div class="health-item">
+          <span>${activityCollectionLabel(key)}</span>
+          <strong>${counts[key] || 0}</strong>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function loadHealthStatus() {
+  const container = document.querySelector("#healthStatus");
+  if (!container) return;
+
+  container.innerHTML = renderHealthStatus();
+  const health = await apiRequest(API_HEALTH_URL);
+  if (!container.isConnected) return;
+  if (!health) {
+    container.innerHTML = renderHealthStatus({
+      ok: false,
+      message: apiErrorMessage("Nao foi possivel consultar a saude do sistema."),
+      detail: "Confirme se o servidor local esta rodando e se sua sessao continua ativa."
+    });
+    return;
+  }
+  container.innerHTML = renderHealthStatus(health);
 }
 
 function bindGoToButtons() {

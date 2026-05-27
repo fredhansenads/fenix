@@ -592,6 +592,47 @@ label {
   color: var(--muted);
 }
 
+.health-summary {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.health-summary strong {
+  font-size: 1rem;
+}
+
+.health-summary p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.health-item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+}
+
+.health-item span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.health-item strong {
+  font-size: 1.25rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -850,6 +891,7 @@ label {
   .two-columns,
   .four-columns,
   .three-columns,
+  .health-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }

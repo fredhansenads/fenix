@@ -97,6 +97,8 @@ O historico de atividades pode ser consultado em:
 
 Esse endpoint exige usuario autenticado com perfil `admin` ou `gestor`, acompanhando a restricao ja aplicada na navegacao do frontend.
 
+A verificacao de saude do sistema pode ser consultada em `GET /api/health`, tambem restrita a `admin` e `gestor`. Ela retorna o tipo de persistencia ativo, se a base esta inicializada e as contagens principais dos modulos.
+
 As rotas modulares ja aplicam validacao basica no servidor:
 
 - Campos obrigatorios por modulo
