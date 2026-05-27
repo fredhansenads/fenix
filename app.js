@@ -435,6 +435,13 @@ async function handleLogin(event) {
     apiSession = await loginToApi(email, password);
   }
 
+  if (apiSession?.token) {
+    const apiState = await loadStateFromApi(apiSession.token);
+    if (apiState) {
+      state = normalizeState(apiState);
+    }
+  }
+
   const user = apiSession?.user
     ? state.users.find((item) => item.id === apiSession.user.id) || state.users.find((item) => item.email.toLowerCase() === email) || apiSession.user
     : localUser?.password === password ? localUser : null;
