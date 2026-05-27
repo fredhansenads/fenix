@@ -3,11 +3,15 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
+const { spawn } = require("child_process");
 
 const root = __dirname;
+loadEnvFile(path.join(root, ".env"));
 const dataDir = path.join(root, "data");
 const databaseFile = path.join(dataDir, "fenix-db.json");
-const databaseRepository = createJsonDatabaseRepository(databaseFile);
+const databaseRepository = process.env.DATABASE_URL || process.env.PGDATABASE
+  ? createPostgresDatabaseRepository()
+  : createJsonDatabaseRepository(databaseFile);
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const sessions = new Map();
@@ -689,6 +693,23 @@ async function writeDatabase(payload) {
   await databaseRepository.write(payload);
 }
 
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const content = fs.readFileSync(filePath, "utf-8").replace(/^\uFEFF/, "");
+  content.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) return;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const value = trimmed.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, "");
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  });
+}
+
 function createJsonDatabaseRepository(filePath) {
   const directory = path.dirname(filePath);
   return {
@@ -708,6 +729,274 @@ function createJsonDatabaseRepository(filePath) {
       await fsp.writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
     }
   };
+}
+
+function createPostgresDatabaseRepository() {
+  return {
+    async read() {
+      const payload = await runPsql([
+        "-t",
+        "-A",
+        "-c",
+        getPostgresReadSql()
+      ]);
+      const data = payload.trim() ? JSON.parse(payload.trim()) : {};
+      return {
+        exists: Array.isArray(data.users) && data.users.length > 0,
+        data
+      };
+    },
+    async write(payload) {
+      await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresWriteSql(payload));
+    }
+  };
+}
+
+function runPsql(extraArgs, input = "") {
+  return new Promise((resolve, reject) => {
+    const psqlPath = process.env.PSQL_PATH || "psql";
+    const connectionArgs = process.env.DATABASE_URL
+      ? [process.env.DATABASE_URL]
+      : [
+        "-h", process.env.PGHOST || "localhost",
+        "-p", process.env.PGPORT || "5432",
+        "-U", process.env.PGUSER || "postgres",
+        "-d", process.env.PGDATABASE || "fenix"
+      ];
+    const child = spawn(psqlPath, ["-X", "-q", ...connectionArgs, ...extraArgs], {
+      env: process.env,
+      windowsHide: true
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf-8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf-8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(new Error(stderr || `psql exited with code ${code}`));
+    });
+
+    if (input) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
+  });
+}
+
+function getPostgresReadSql() {
+  return `
+SELECT jsonb_build_object(
+  'session', NULL,
+  'auditLogs', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'action', action,
+    'collection', collection,
+    'recordId', record_id,
+    'recordLabel', record_label,
+    'actorId', actor_id,
+    'actorName', actor_name,
+    'actorRole', actor_role,
+    'changedFields', changed_fields,
+    'deniedAction', denied_action,
+    'deniedReason', denied_reason,
+    'metadata', metadata,
+    'createdAt', created_at
+  ) ORDER BY created_at DESC) FROM audit_logs), '[]'::jsonb),
+  'notificationReads', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'userId', user_id,
+    'notificationId', notification_id,
+    'readAt', read_at
+  ) ORDER BY read_at DESC) FROM notification_reads), '[]'::jsonb),
+  'users', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'name', name,
+    'email', email,
+    'passwordHash', password_hash,
+    'role', role,
+    'status', status
+  ) ORDER BY created_at) FROM users), '[]'::jsonb),
+  'clients', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'type', type,
+    'name', name,
+    'document', document,
+    'email', email,
+    'phone', phone,
+    'status', status,
+    'notes', notes
+  ) ORDER BY created_at) FROM clients), '[]'::jsonb),
+  'suppliers', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'name', name,
+    'document', document,
+    'email', email,
+    'phone', phone,
+    'category', category,
+    'status', status
+  ) ORDER BY created_at) FROM suppliers), '[]'::jsonb),
+  'categories', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'name', name,
+    'type', type
+  ) ORDER BY created_at) FROM categories), '[]'::jsonb),
+  'payables', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'supplierId', supplier_id,
+    'category', category,
+    'description', description,
+    'amount', amount,
+    'dueDate', due_date,
+    'paymentDate', payment_date,
+    'status', status,
+    'notes', notes
+  ) ORDER BY created_at) FROM payables), '[]'::jsonb),
+  'receivables', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'clientId', client_id,
+    'proposalId', proposal_id,
+    'category', category,
+    'description', description,
+    'amount', amount,
+    'dueDate', due_date,
+    'receivedDate', received_date,
+    'status', status,
+    'paymentMethod', payment_method
+  ) ORDER BY created_at) FROM receivables), '[]'::jsonb),
+  'proposals', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'clientId', client_id,
+    'title', title,
+    'description', description,
+    'amount', amount,
+    'validUntil', valid_until,
+    'status', status,
+    'responsibleId', responsible_id,
+    'sentAt', sent_at,
+    'approvedAt', approved_at,
+    'notes', notes
+  ) ORDER BY created_at) FROM proposals), '[]'::jsonb),
+  'contracts', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'clientId', client_id,
+    'contractNumber', contract_number,
+    'title', title,
+    'amount', amount,
+    'startDate', start_date,
+    'endDate', end_date,
+    'status', status,
+    'responsibleId', responsible_id,
+    'signedAt', signed_at,
+    'notes', notes
+  ) ORDER BY created_at) FROM contracts), '[]'::jsonb),
+  'projects', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'clientId', client_id,
+    'name', name,
+    'description', description,
+    'responsibleId', responsible_id,
+    'startDate', start_date,
+    'dueDate', due_date,
+    'status', status
+  ) ORDER BY created_at) FROM projects), '[]'::jsonb),
+  'tasks', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'projectId', project_id,
+    'title', title,
+    'description', description,
+    'responsibleId', responsible_id,
+    'priority', priority,
+    'status', status,
+    'dueDate', due_date,
+    'completedAt', completed_at
+  ) ORDER BY created_at) FROM tasks), '[]'::jsonb)
+)::text;
+`;
+}
+
+function getPostgresWriteSql(payload) {
+  const tag = `fenix_payload_${crypto.randomBytes(8).toString("hex")}`;
+  return `
+BEGIN;
+TRUNCATE notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO users (id, name, email, password_hash, role, status)
+SELECT
+  record->>'id',
+  record->>'name',
+  lower(record->>'email'),
+  COALESCE(NULLIF(record->>'passwordHash', ''), '${hashPassword("santus123")}'),
+  record->>'role',
+  record->>'status'
+FROM payload, jsonb_array_elements(COALESCE(data->'users', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO clients (id, type, name, document, email, phone, status, notes)
+SELECT record->>'id', record->>'type', record->>'name', record->>'document', record->>'email', record->>'phone', record->>'status', record->>'notes'
+FROM payload, jsonb_array_elements(COALESCE(data->'clients', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO suppliers (id, name, document, email, phone, category, status)
+SELECT record->>'id', record->>'name', record->>'document', record->>'email', record->>'phone', record->>'category', record->>'status'
+FROM payload, jsonb_array_elements(COALESCE(data->'suppliers', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO categories (id, name, type)
+SELECT record->>'id', record->>'name', record->>'type'
+FROM payload, jsonb_array_elements(COALESCE(data->'categories', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO payables (id, supplier_id, category, description, amount, due_date, payment_date, status, notes)
+SELECT record->>'id', NULLIF(record->>'supplierId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'paymentDate', '')::date, record->>'status', record->>'notes'
+FROM payload, jsonb_array_elements(COALESCE(data->'payables', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO proposals (id, client_id, title, description, amount, valid_until, status, responsible_id, sent_at, approved_at, notes)
+SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'title', record->>'description', (record->>'amount')::numeric, (record->>'validUntil')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'sentAt', '')::date, NULLIF(record->>'approvedAt', '')::date, record->>'notes'
+FROM payload, jsonb_array_elements(COALESCE(data->'proposals', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO receivables (id, client_id, proposal_id, category, description, amount, due_date, received_date, status, payment_method)
+SELECT record->>'id', NULLIF(record->>'clientId', ''), NULLIF(record->>'proposalId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'receivedDate', '')::date, record->>'status', record->>'paymentMethod'
+FROM payload, jsonb_array_elements(COALESCE(data->'receivables', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO contracts (id, client_id, contract_number, title, amount, start_date, end_date, status, responsible_id, signed_at, notes)
+SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'contractNumber', record->>'title', (record->>'amount')::numeric, (record->>'startDate')::date, (record->>'endDate')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'signedAt', '')::date, record->>'notes'
+FROM payload, jsonb_array_elements(COALESCE(data->'contracts', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO projects (id, client_id, name, description, responsible_id, start_date, due_date, status)
+SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'name', record->>'description', NULLIF(record->>'responsibleId', ''), (record->>'startDate')::date, (record->>'dueDate')::date, record->>'status'
+FROM payload, jsonb_array_elements(COALESCE(data->'projects', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO tasks (id, project_id, title, description, responsible_id, priority, status, due_date, completed_at)
+SELECT record->>'id', NULLIF(record->>'projectId', ''), record->>'title', record->>'description', NULLIF(record->>'responsibleId', ''), record->>'priority', record->>'status', (record->>'dueDate')::date, NULLIF(record->>'completedAt', '')::date
+FROM payload, jsonb_array_elements(COALESCE(data->'tasks', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO audit_logs (id, action, collection, record_id, record_label, actor_id, actor_name, actor_role, changed_fields, denied_action, denied_reason, metadata, created_at)
+SELECT record->>'id', record->>'action', record->>'collection', record->>'recordId', record->>'recordLabel', record->>'actorId', record->>'actorName', record->>'actorRole', COALESCE(record->'changedFields', '[]'::jsonb), record->>'deniedAction', record->>'deniedReason', COALESCE(record->'metadata', '{}'::jsonb), COALESCE(NULLIF(record->>'createdAt', '')::timestamptz, now())
+FROM payload, jsonb_array_elements(COALESCE(data->'auditLogs', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO notification_reads (id, user_id, notification_id, read_at)
+SELECT record->>'id', NULLIF(record->>'userId', ''), record->>'notificationId', COALESCE(NULLIF(record->>'readAt', '')::timestamptz, now())
+FROM payload, jsonb_array_elements(COALESCE(data->'notificationReads', '[]'::jsonb)) AS record;
+
+COMMIT;
+`;
 }
 
 async function parseJsonBody(request, response) {

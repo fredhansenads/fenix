@@ -41,12 +41,13 @@ node server.js
 
 Esta versao usa uma persistencia hibrida:
 
-- Com `node server.js`, os dados sao salvos pela API local em `data/fenix-db.json`.
+- Com `node server.js` e `.env` apontando para PostgreSQL, os dados sao salvos no banco configurado em `DATABASE_URL` ou nas variaveis `PG*`.
+- Com `node server.js` sem configuracao PostgreSQL, os dados sao salvos pela API local em `data/fenix-db.json`.
 - Sem o servidor local, o sistema continua funcionando com `localStorage` no navegador.
 
-O backend concentra leitura e escrita em uma camada simples de repositorio JSON. Essa separacao prepara a migracao futura para PostgreSQL sem alterar diretamente as rotas e regras de negocio.
+O backend concentra leitura e escrita em uma camada simples de repositorio. Essa separacao permite alternar entre PostgreSQL e JSON sem alterar diretamente as rotas e regras de negocio.
 
-O arquivo `docs/postgres-schema.sql` contem o primeiro desenho do schema PostgreSQL, cobrindo os modulos atuais, relacionamentos, restricoes, auditoria e notificacoes lidas.
+O arquivo `docs/postgres-schema.sql` contem o schema PostgreSQL inicial, cobrindo os modulos atuais, relacionamentos, restricoes, auditoria e notificacoes lidas.
 
 O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
 
