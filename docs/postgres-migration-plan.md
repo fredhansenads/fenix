@@ -16,6 +16,8 @@ Status em maio de 2026:
 - `scripts/restore-postgres.js` lista backups, simula restauracao e restaura com confirmacao explicita.
 - Painel `Configuracoes > Saude do sistema` consulta `GET /api/health` e confirma a persistencia ativa.
 - Tabela `user_sessions` registra sessoes persistentes com hash do token quando PostgreSQL esta ativo.
+- Rota `GET /api/bootstrap` carrega dados iniciais autenticados sem depender diretamente de `/api/state`.
+- Rotas `GET` e `POST /api/notification-reads` registram notificacoes lidas por usuario autenticado.
 
 O JSON continua existindo como fallback tecnico, mas a persistencia local principal ja pode ser PostgreSQL quando o `.env` esta configurado.
 
@@ -36,7 +38,7 @@ O JSON continua existindo como fallback tecnico, mas a persistencia local princi
 6. Validar leitura das rotas modulares.
 7. Alternar o repositorio do backend de JSON para PostgreSQL.
 8. Manter o JSON congelado como backup temporario.
-9. Remover a dependencia do endpoint `/api/state` apos a API modular cobrir todo o carregamento inicial.
+9. Reduzir gradualmente a dependencia do endpoint `/api/state` apos a API modular cobrir todo o carregamento inicial.
 
 ## Ordem de carga dos dados
 

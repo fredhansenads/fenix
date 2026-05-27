@@ -334,6 +334,12 @@ Quando PostgreSQL esta ativo, a sessao tambem e registrada na tabela `user_sessi
 
 Rotas usadas para compatibilidade com o modelo inicial do MVP. Quando a base ja existe, exigem usuario `admin`.
 
+### Bootstrap autenticado
+
+- `GET /api/bootstrap`
+
+Rota usada pelo frontend para carregar o estado inicial depois do login. Ela reduz a dependencia direta de `/api/state`, preservando `/api/state` como compatibilidade e fallback.
+
 ### Rotas modulares
 
 Padrao:
@@ -364,6 +370,13 @@ Colecoes suportadas:
 - `GET /api/activity-log`
 
 Restrita a `admin` e `gestor`.
+
+### Notificacoes lidas
+
+- `GET /api/notification-reads`
+- `POST /api/notification-reads`
+
+Rotas vinculadas ao usuario autenticado. O frontend usa essas rotas para marcar notificacoes como lidas sem gravar o estado completo do ERP.
 
 ### Saude
 
@@ -440,11 +453,12 @@ Fase 2 em andamento avancado:
 - Backup local do PostgreSQL.
 - Restauracao assistida de backup.
 - Painel de saude do sistema.
+- Bootstrap autenticado e rota modular para notificacoes lidas.
 
 ## 18. Proximas etapas recomendadas
 
-1. Modularizar carregamento inicial para depender menos de `/api/state`.
-2. Evoluir auditoria para consultas paginadas.
+1. Evoluir auditoria para consultas paginadas.
+2. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
 3. Adicionar testes automatizados basicos.
 4. Revisar UX/UI final da Fase 2 em desktop e mobile.
 5. Consolidar checklist operacional de execucao, backup, restore e validacao.

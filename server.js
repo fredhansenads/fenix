@@ -155,8 +155,18 @@ async function handleApi(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/bootstrap") {
+    await handleBootstrapApi(request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/state") {
     await handleStateApi(request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/notification-reads") {
+    await handleNotificationReadsApi(request, response);
     return;
   }
 
@@ -245,6 +255,33 @@ async function handleLogoutApi(request, response) {
   sendJson(response, 200, { ok: true });
 }
 
+async function handleBootstrapApi(request, response) {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    sendUnauthorized(response);
+    return;
+  }
+
+  const database = await readDatabase();
+  if (!database.exists) {
+    sendJson(response, 404, { error: "Database not initialized" });
+    return;
+  }
+
+  const state = sanitizeState(database.data);
+  state.session = null;
+  state.notificationReads = getNotificationReadIds(database.data, session.id);
+  if (!["admin", "gestor"].includes(session.role)) {
+    state.auditLogs = [];
+  }
+  sendJson(response, 200, state);
+}
+
 async function handleStateApi(request, response) {
   const database = await readDatabase();
 
@@ -266,6 +303,49 @@ async function handleStateApi(request, response) {
     }, database.exists ? database.data : {});
     await writeDatabase(nextPayload);
     sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  sendJson(response, 405, { error: "Method not allowed" });
+}
+
+async function handleNotificationReadsApi(request, response) {
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    sendUnauthorized(response);
+    return;
+  }
+
+  const database = await readDatabase();
+  const data = database.exists ? database.data : {};
+  data.notificationReads = Array.isArray(data.notificationReads) ? data.notificationReads : [];
+
+  if (request.method === "GET") {
+    sendJson(response, 200, getNotificationReadIds(data, session.id));
+    return;
+  }
+
+  if (request.method === "POST") {
+    const payload = await parseJsonBody(request, response);
+    if (!payload) return;
+    const notificationIds = Array.isArray(payload.notificationIds)
+      ? payload.notificationIds
+      : [payload.notificationId];
+    const cleanIds = [...new Set(notificationIds.map((id) => String(id || "").trim()).filter(Boolean))];
+
+    cleanIds.forEach((notificationId) => {
+      if (hasNotificationRead(data.notificationReads, session.id, notificationId)) return;
+      data.notificationReads.push({
+        id: createId(),
+        userId: session.id,
+        notificationId,
+        readAt: new Date().toISOString()
+      });
+    });
+
+    data.notificationReads = data.notificationReads.slice(-500);
+    await writeDatabase(data);
+    sendJson(response, 200, { ok: true, notificationReads: getNotificationReadIds(data, session.id) });
     return;
   }
 
@@ -667,6 +747,27 @@ function summarizeCollections(data) {
     summary[collection] = Array.isArray(data?.[collection]) ? data[collection].length : 0;
     return summary;
   }, {});
+}
+
+function getNotificationReadIds(data, userId) {
+  const reads = Array.isArray(data?.notificationReads) ? data.notificationReads : [];
+  return [...new Set(reads.map((read) => {
+    if (typeof read === "string") return read;
+    if (!read || typeof read !== "object") return "";
+    const readUserId = read.userId || read.user_id || "";
+    if (readUserId && readUserId !== userId) return "";
+    return read.notificationId || read.notification_id || "";
+  }).filter(Boolean))];
+}
+
+function hasNotificationRead(reads, userId, notificationId) {
+  return (Array.isArray(reads) ? reads : []).some((read) => {
+    if (typeof read === "string") return read === notificationId;
+    if (!read || typeof read !== "object") return false;
+    const readUserId = read.userId || read.user_id || "";
+    const readNotificationId = read.notificationId || read.notification_id || "";
+    return readNotificationId === notificationId && (!readUserId || readUserId === userId);
+  });
 }
 
 function normalizeRecord(collection, record) {
@@ -1103,8 +1204,20 @@ FROM payload, jsonb_array_elements(COALESCE(data->'auditLogs', '[]'::jsonb)) AS 
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
 INSERT INTO notification_reads (id, user_id, notification_id, read_at)
-SELECT record->>'id', NULLIF(record->>'userId', ''), record->>'notificationId', COALESCE(NULLIF(record->>'readAt', '')::timestamptz, now())
-FROM payload, jsonb_array_elements(COALESCE(data->'notificationReads', '[]'::jsonb)) AS record;
+SELECT
+  COALESCE(NULLIF(record->>'id', ''), md5(notification_id || COALESCE(record->>'userId', 'global'))),
+  NULLIF(COALESCE(record->>'userId', record->>'user_id'), ''),
+  notification_id,
+  COALESCE(NULLIF(COALESCE(record->>'readAt', record->>'read_at'), '')::timestamptz, now())
+FROM payload,
+  jsonb_array_elements(COALESCE(data->'notificationReads', '[]'::jsonb)) AS record,
+  LATERAL (
+    SELECT CASE
+      WHEN jsonb_typeof(record) = 'string' THEN trim(both '"' from record::text)
+      ELSE COALESCE(record->>'notificationId', record->>'notification_id')
+    END AS notification_id
+  ) AS normalized_notification
+WHERE notification_id IS NOT NULL AND notification_id <> '';
 
 DELETE FROM user_sessions
 WHERE expires_at <= now()

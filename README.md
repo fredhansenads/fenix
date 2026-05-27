@@ -117,6 +117,12 @@ O servidor mantem compatibilidade com o estado completo em:
 
 Depois que o banco local existe, essas rotas exigem sessao autenticada de `admin`, pois leem e gravam o estado completo do ERP. A unica excecao e o primeiro bootstrap: quando `data/fenix-db.json` ainda nao existe, o frontend pode inicializar o arquivo local.
 
+O carregamento principal autenticado usa:
+
+- `GET /api/bootstrap`
+
+Essa rota retorna os dados iniciais do ERP sem depender diretamente de `/api/state`, mantendo `/api/state` apenas como compatibilidade e fallback.
+
 E tambem expoe rotas por modulo para preparar a migracao futura:
 
 - `GET /api/clients`
@@ -126,6 +132,11 @@ E tambem expoe rotas por modulo para preparar a migracao futura:
 - `DELETE /api/clients/:id`
 
 O mesmo padrao vale para `users`, `suppliers`, `categories`, `payables`, `receivables`, `proposals`, `contracts`, `projects` e `tasks`.
+
+As notificacoes lidas possuem rotas proprias por usuario autenticado:
+
+- `GET /api/notification-reads`
+- `POST /api/notification-reads`
 
 O historico de atividades pode ser consultado em:
 

@@ -1,6 +1,8 @@
 const STORE_KEY = "santus_erp_mvp";
 const API_STATE_URL = "/api/state";
+const API_BOOTSTRAP_URL = "/api/bootstrap";
 const API_HEALTH_URL = "/api/health";
+const API_NOTIFICATION_READS_URL = "/api/notification-reads";
 const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
 const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
@@ -173,12 +175,16 @@ function normalizeState(savedState) {
       normalized[collection] = [];
     }
   });
+  normalized.notificationReads = normalizeNotificationReads(normalized.notificationReads);
   return normalized;
 }
 
-function saveState() {
+function saveState(options = {}) {
+  const { syncApi = true } = options;
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
-  saveStateToApi(state);
+  if (syncApi) {
+    saveStateToApi(state);
+  }
 }
 
 function readCachedSession() {
@@ -194,10 +200,32 @@ async function loadStateFromApi(token = "") {
     return null;
   }
 
+  if (token) {
+    const bootstrapState = await loadStateFromBootstrap(token);
+    if (bootstrapState) {
+      return bootstrapState;
+    }
+  }
+
   try {
     const response = await fetch(API_STATE_URL, {
       cache: "no-store",
       headers: token ? { "Authorization": `Bearer ${token}` } : {}
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function loadStateFromBootstrap(token) {
+  try {
+    const response = await fetch(API_BOOTSTRAP_URL, {
+      cache: "no-store",
+      headers: { "Authorization": `Bearer ${token}` }
     });
     if (!response.ok) {
       return null;
@@ -235,6 +263,14 @@ async function saveStateToApi(nextState) {
     // The localStorage fallback keeps the MVP usable without the local server.
     return false;
   }
+}
+
+function normalizeNotificationReads(reads) {
+  return [...new Set((Array.isArray(reads) ? reads : []).map((read) => {
+    if (typeof read === "string") return read;
+    if (!read || typeof read !== "object") return "";
+    return read.notificationId || read.notification_id || "";
+  }).filter(Boolean))];
 }
 
 async function apiRequest(path, options = {}) {
@@ -372,6 +408,24 @@ async function deleteRecordFromApi(collection, id) {
   const result = await apiRequest(collectionApiPath(collection, id), { method: "DELETE" });
   addAuditLogFromApi(result?.auditLog);
   return result;
+}
+
+async function saveNotificationReadsToApi(notificationIds) {
+  const ids = (Array.isArray(notificationIds) ? notificationIds : [notificationIds])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  if (!ids.length) {
+    return true;
+  }
+
+  const result = await apiRequest(API_NOTIFICATION_READS_URL, {
+    method: "POST",
+    body: JSON.stringify({ notificationIds: ids })
+  });
+  if (result?.notificationReads) {
+    state.notificationReads = normalizeNotificationReads(result.notificationReads);
+  }
+  return Boolean(result?.ok);
 }
 
 function addAuditLogFromApi(auditLog) {
@@ -2100,21 +2154,24 @@ function bindNotificationActions() {
   content.querySelectorAll("[data-mark-notification]").forEach((button) => {
     button.addEventListener("click", () => markNotificationRead(button.dataset.markNotification));
   });
-  content.querySelector("[data-mark-all-notifications]")?.addEventListener("click", () => {
-    getUnreadNotifications().forEach((notification) => markNotificationRead(notification.id, false));
-    saveState();
+  content.querySelector("[data-mark-all-notifications]")?.addEventListener("click", async () => {
+    const ids = getUnreadNotifications().map((notification) => notification.id);
+    ids.forEach((id) => markNotificationRead(id, false));
+    saveState({ syncApi: false });
+    await saveNotificationReadsToApi(ids);
     updateNotificationSummary();
     renderNotifications();
     toast("Notificacoes marcadas como lidas.");
   });
 }
 
-function markNotificationRead(id, shouldRender = true) {
+async function markNotificationRead(id, shouldRender = true) {
   if (!id || state.notificationReads.includes(id)) return;
   state.notificationReads.push(id);
   state.notificationReads = state.notificationReads.slice(-500);
   if (shouldRender) {
-    saveState();
+    saveState({ syncApi: false });
+    await saveNotificationReadsToApi([id]);
     updateNotificationSummary();
     renderNotifications();
     toast("Notificacao marcada como lida.");
