@@ -51,6 +51,7 @@ docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
+scripts/backup-postgres.js         Backup SQL local do PostgreSQL
 ```
 
 Arquivos sensiveis e dados locais nao devem ir para o Git:
@@ -58,6 +59,8 @@ Arquivos sensiveis e dados locais nao devem ir para o Git:
 ```text
 .env
 data/*.json
+backups/*.sql
+backups/*.dump
 ```
 
 ## 5. Modulos implementados
@@ -269,7 +272,23 @@ O seed recria dados de exemplo para:
 
 Esse script e util para analise visual, testes funcionais e apresentacoes.
 
-## 11. API local
+## 11. Backup local
+
+Para gerar um backup SQL local do PostgreSQL:
+
+```powershell
+node scripts\backup-postgres.js
+```
+
+O arquivo sera criado em:
+
+```text
+backups/<database>-backup-<data>.sql
+```
+
+Os backups ficam fora do Git por padrao. Recomenda-se gerar backup antes de migracoes, alteracoes estruturais no schema, limpeza de dados ou testes de carga.
+
+## 12. API local
 
 ### Autenticacao
 
@@ -326,7 +345,7 @@ Restrita a `admin` e `gestor`.
 
 Restrita a `admin` e `gestor`.
 
-## 12. Regras de negocio atuais
+## 13. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -338,7 +357,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 13. Indicadores e relatorios
+## 14. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -359,7 +378,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 14. Status da Fase 1
+## 15. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -376,7 +395,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 15. Status da Fase 2
+## 16. Status da Fase 2
 
 Fase 2 em andamento avancado:
 
@@ -390,20 +409,21 @@ Fase 2 em andamento avancado:
 - Auditoria inicial.
 - PostgreSQL local integrado.
 - Seed demonstrativo.
+- Backup local do PostgreSQL.
 - Painel de saude do sistema.
 
-## 16. Proximas etapas recomendadas
+## 17. Proximas etapas recomendadas
 
 1. Evoluir sessao para armazenamento persistente em banco.
 2. Criar tabela propria de sessoes ou tokens.
 3. Modularizar carregamento inicial para depender menos de `/api/state`.
 4. Evoluir auditoria para consultas paginadas.
-5. Criar backup/exportacao do banco.
+5. Evoluir backup para restauracao assistida.
 6. Adicionar testes automatizados basicos.
 7. Preparar empacotamento de ambiente local.
 8. Iniciar automacoes da Fase 3.
 
-## 17. Criterios de sucesso
+## 18. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

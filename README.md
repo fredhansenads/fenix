@@ -71,6 +71,14 @@ node scripts/seed-postgres-demo.js
 
 Esse seed recria uma base de demonstracao com usuarios, clientes, fornecedores, categorias, contas a pagar, contas a receber, propostas, contratos, projetos e tarefas. Ele le o arquivo `.env` automaticamente.
 
+Para gerar um backup SQL local do PostgreSQL, use:
+
+```bash
+node scripts/backup-postgres.js
+```
+
+Os arquivos sao criados em `backups/` e ficam fora do Git.
+
 ## API local
 
 Autenticacao local:
