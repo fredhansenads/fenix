@@ -1,6 +1,6 @@
 # Plano de migracao para PostgreSQL
 
-Este documento descreve como migrar o FÊNIX do arquivo `data/fenix-db.json` para o schema PostgreSQL definido em `docs/postgres-schema.sql`.
+Este documento descreve como migrar o SantusERP do arquivo `data/fenix-db.json` para o schema PostgreSQL definido em `docs/postgres-schema.sql`.
 
 ## Status atual
 

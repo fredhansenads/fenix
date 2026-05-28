@@ -1,14 +1,14 @@
-# FÊNIX MVP
+# SantusERP MVP
 
-Este repositorio contem o primeiro MVP web do FÊNIX, o ERP da SANTUS.
+Este repositorio contem o primeiro MVP web do SantusERP, o ERP da SANTUS.
 
 ## Documentacao oficial
 
 A documentacao consolidada do sistema esta em:
 
-- `docs/fenix-documentacao-oficial.md`
-- `docs/fenix-checklist-operacional.md`
-- `docs/fenix-ambiente-local.md`
+- `docs/santuserp-documentacao-oficial.md`
+- `docs/santuserp-checklist-operacional.md`
+- `docs/santuserp-ambiente-local.md`
 
 Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases e proximas etapas recomendadas.
 
@@ -25,7 +25,7 @@ node server.js
 No Windows, tambem e possivel usar o inicializador local:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Open
+.\scripts\start-santuserp.ps1 -Open
 ```
 
 ## Acesso inicial
@@ -138,7 +138,7 @@ npm run backup
 
 No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use `npm.cmd` nos mesmos comandos, por exemplo `npm.cmd run check`.
 
-O guia completo de ambiente local esta em `docs/fenix-ambiente-local.md`.
+O guia completo de ambiente local esta em `docs/santuserp-ambiente-local.md`.
 
 ## API local
 
@@ -227,9 +227,9 @@ A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes,
 
 As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API prioriza o token de sessao gerado no login e mantem compatibilidade com os cabecalhos enviados pelo sistema:
 
-- `x-fenix-user-id`
-- `x-fenix-user-name`
-- `x-fenix-user-role`
+- `x-santuserp-user-id`
+- `x-santuserp-user-name`
+- `x-santuserp-user-role`
 
 Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forbidden` e nao altera os dados. Quando um token invalido ou expirado e enviado, a API retorna `401 Unauthorized`.
 

@@ -9,11 +9,11 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-Write-Host "FENIX ERP - ambiente local" -ForegroundColor Green
+Write-Host "SantusERP - ambiente local" -ForegroundColor Green
 Write-Host "Pasta: $Root"
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  throw "Node.js nao encontrado no PATH. Instale ou ajuste o PATH antes de iniciar o FENIX."
+  throw "Node.js nao encontrado no PATH. Instale ou ajuste o PATH antes de iniciar o SantusERP."
 }
 
 if (-not (Test-Path ".env")) {

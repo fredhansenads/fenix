@@ -80,7 +80,7 @@ const initialData = {
     { id: uid(), clientId: null, title: "Automacao comercial", description: "Fluxo de CRM e propostas.", amount: 9500, validUntil: isoOffset(20), status: "aprovada", responsibleId: null, sentAt: isoOffset(-10), approvedAt: isoOffset(-1), notes: "" }
   ],
   contracts: [
-    { id: uid(), clientId: null, contractNumber: "FENIX-2026-001", title: "Contrato de implantacao ERP", amount: 18000, startDate: isoOffset(-5), endDate: isoOffset(85), status: "ativo", responsibleId: null, signedAt: isoOffset(-5), notes: "Contrato demonstrativo do MVP." }
+    { id: uid(), clientId: null, contractNumber: "SantusERP-2026-001", title: "Contrato de implantacao ERP", amount: 18000, startDate: isoOffset(-5), endDate: isoOffset(85), status: "ativo", responsibleId: null, signedAt: isoOffset(-5), notes: "Contrato demonstrativo do MVP." }
   ],
   projects: [
     { id: uid(), clientId: null, name: "Implantacao ERP SANTUS", description: "MVP administrativo e financeiro.", responsibleId: null, startDate: isoOffset(-2), dueDate: isoOffset(28), status: "em_andamento" }
@@ -352,9 +352,9 @@ async function apiRequest(path, options = {}) {
         "Content-Type": "application/json",
         ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         ...(user ? {
-          "X-Fenix-User-Id": user.id,
-          "X-Fenix-User-Name": user.name,
-          "X-Fenix-User-Role": user.role
+          "X-SantusERP-User-Id": user.id,
+          "X-SantusERP-User-Name": user.name,
+          "X-SantusERP-User-Role": user.role
         } : {}),
         ...(options.headers || {})
       }
@@ -2100,7 +2100,7 @@ function exportReportCsv(type, reports = [], period = getReportPeriod()) {
     toast("Nao ha dados para exportar.");
     return;
   }
-  downloadCsv(`fenix-relatorio-${type}.csv`, rows);
+  downloadCsv(`santuserp-relatorio-${type}.csv`, rows);
   toast("Relatorio exportado.");
 }
 
@@ -2714,7 +2714,7 @@ async function exportActivityCsv() {
     toast("Nao ha dados para exportar.");
     return;
   }
-  downloadCsv("fenix-auditoria.csv", logs.map((log) => ({
+  downloadCsv("santuserp-auditoria.csv", logs.map((log) => ({
     data: formatDateTime(log.createdAt),
     acao: activityActionLabel(log.action),
     modulo: activityCollectionLabel(log.collection),
@@ -2959,7 +2959,7 @@ function exportCsv(collection, schemaId = "") {
     toast("Nao ha dados para exportar.");
     return;
   }
-  downloadCsv(`fenix-${collection}.csv`, rows);
+  downloadCsv(`santuserp-${collection}.csv`, rows);
   toast("Arquivo CSV exportado.");
 }
 

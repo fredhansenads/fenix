@@ -45,7 +45,7 @@ Uso:
   node scripts/seed-postgres-demo.js
 
 Objetivo:
-  Popular o banco PostgreSQL do FENIX com dados demonstrativos consistentes.
+  Popular o banco PostgreSQL do SantusERP com dados demonstrativos consistentes.
 
 Configuracao:
   O script le .env automaticamente e usa DATABASE_URL ou variaveis PG*.
@@ -96,14 +96,14 @@ function buildDemoData() {
   ];
 
   const proposals = [
-    { id: "pro_fenix_mvp", clientId: "cli_nexus", title: "ERP interno fase 1", description: "Implantacao do MVP administrativo.", amount: 18000, validUntil: isoOffset(12), status: "enviada", responsibleId: "usr_comercial", sentAt: isoOffset(-4), approvedAt: "", notes: "" },
+    { id: "pro_santuserp_mvp", clientId: "cli_nexus", title: "ERP interno fase 1", description: "Implantacao do MVP administrativo.", amount: 18000, validUntil: isoOffset(12), status: "enviada", responsibleId: "usr_comercial", sentAt: isoOffset(-4), approvedAt: "", notes: "" },
     { id: "pro_automacao", clientId: "cli_orion", title: "Automacao comercial", description: "Fluxo de CRM e propostas.", amount: 9500, validUntil: isoOffset(20), status: "aprovada", responsibleId: "usr_comercial", sentAt: isoOffset(-10), approvedAt: isoOffset(-1), notes: "" },
     { id: "pro_bi", clientId: "cli_atlas", title: "Dashboard executivo BI", description: "Indicadores integrados de operacao.", amount: 12500, validUntil: isoOffset(5), status: "rascunho", responsibleId: "usr_comercial", sentAt: "", approvedAt: "", notes: "Revisar escopo com area tecnica." }
   ];
 
   const contracts = [
-    { id: "ctr_fenix_001", clientId: "cli_nexus", contractNumber: "FENIX-2026-001", title: "Contrato de implantacao ERP", amount: 18000, startDate: isoOffset(-5), endDate: isoOffset(85), status: "ativo", responsibleId: "usr_admin", signedAt: isoOffset(-5), notes: "Contrato demonstrativo do MVP." },
-    { id: "ctr_auto_002", clientId: "cli_orion", contractNumber: "FENIX-2026-002", title: "Contrato de automacao comercial", amount: 9500, startDate: isoOffset(-1), endDate: isoOffset(59), status: "rascunho", responsibleId: "usr_comercial", signedAt: "", notes: "Aguardando assinatura final." }
+    { id: "ctr_santuserp_001", clientId: "cli_nexus", contractNumber: "SantusERP-2026-001", title: "Contrato de implantacao ERP", amount: 18000, startDate: isoOffset(-5), endDate: isoOffset(85), status: "ativo", responsibleId: "usr_admin", signedAt: isoOffset(-5), notes: "Contrato demonstrativo do MVP." },
+    { id: "ctr_auto_002", clientId: "cli_orion", contractNumber: "SantusERP-2026-002", title: "Contrato de automacao comercial", amount: 9500, startDate: isoOffset(-1), endDate: isoOffset(59), status: "rascunho", responsibleId: "usr_comercial", signedAt: "", notes: "Aguardando assinatura final." }
   ];
 
   const projects = [
@@ -125,7 +125,7 @@ function buildDemoData() {
   ];
 
   const receivables = [
-    { id: "rec_nexus_mensal", clientId: "cli_nexus", proposalId: "pro_fenix_mvp", category: "Receita de servicos", description: "Mensalidade Nexus Digital", amount: 4200, dueDate: isoOffset(2), receivedDate: "", status: "pendente", paymentMethod: "Pix" },
+    { id: "rec_nexus_mensal", clientId: "cli_nexus", proposalId: "pro_santuserp_mvp", category: "Receita de servicos", description: "Mensalidade Nexus Digital", amount: 4200, dueDate: isoOffset(2), receivedDate: "", status: "pendente", paymentMethod: "Pix" },
     { id: "rec_orion_setup", clientId: "cli_orion", proposalId: "pro_automacao", category: "Receita de servicos", description: "Setup de automacao", amount: 7800, dueDate: isoOffset(-6), receivedDate: isoOffset(-2), status: "recebido", paymentMethod: "Transferencia" },
     { id: "rec_atlas_bi", clientId: "cli_atlas", proposalId: "pro_bi", category: "Receita de servicos", description: "Entrada projeto BI", amount: 5000, dueDate: isoOffset(9), receivedDate: "", status: "pendente", paymentMethod: "Boleto" }
   ];

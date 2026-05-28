@@ -1,8 +1,8 @@
 {
-  "name": "fenix-erp",
+  "name": "santuserp",
   "version": "0.2.0",
   "private": true,
-  "description": "ERP web FENIX da SANTUS",
+  "description": "ERP web SantusERP da SANTUS",
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/ops-check.js",

@@ -1,18 +1,18 @@
-# FÊNIX ERP - Checklist operacional
+# SantusERP - Checklist operacional
 
-Este checklist orienta a rotina local de execucao, validacao, backup e restauracao do FÊNIX.
+Este checklist orienta a rotina local de execucao, validacao, backup e restauracao do SantusERP.
 
 ## 1. Iniciar o sistema
 
 ```powershell
-cd "C:\Users\PC-01\Documents\FÊNIX"
+cd "<pasta-do-projeto>"
 node server.js
 ```
 
 Opcao assistida no Windows:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Open
+.\scripts\start-santuserp.ps1 -Open
 ```
 
 Acesse:
@@ -145,7 +145,7 @@ Esse comando recria dados de demonstracao e limpa sessoes anteriores.
 
 ## 9. Verificar saude pelo sistema
 
-No FÊNIX:
+No SantusERP:
 
 ```text
 Configuracoes > Saude do sistema
@@ -163,7 +163,7 @@ Conferir:
 1. Rodar `npm run check`.
 2. Rodar `npm run smoke`.
 3. Gerar backup com `npm run backup`.
-4. Iniciar `.\scripts\start-fenix.ps1 -Open`.
+4. Iniciar `.\scripts\start-santuserp.ps1 -Open`.
 5. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
 6. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
 

@@ -649,9 +649,9 @@ async function authenticateActor(request) {
 
 function getHeaderActor(request) {
   return {
-    id: request.headers["x-fenix-user-id"] || "local",
-    name: request.headers["x-fenix-user-name"] || "Usuario local",
-    role: request.headers["x-fenix-user-role"] || "admin"
+    id: request.headers["x-santuserp-user-id"] || request.headers["x-fenix-user-id"] || "local",
+    name: request.headers["x-santuserp-user-name"] || request.headers["x-fenix-user-name"] || "Usuario local",
+    role: request.headers["x-santuserp-user-role"] || request.headers["x-fenix-user-role"] || "admin"
   };
 }
 
@@ -680,7 +680,7 @@ function getRequestToken(request) {
   if (authorization.toLowerCase().startsWith("bearer ")) {
     return authorization.slice(7).trim();
   }
-  return request.headers["x-fenix-session-token"] || "";
+  return request.headers["x-santuserp-session-token"] || request.headers["x-fenix-session-token"] || "";
 }
 
 function sanitizeUser(user) {
@@ -1355,5 +1355,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`FENIX available at http://${host}:${port}`);
+  console.log(`SantusERP available at http://${host}:${port}`);
 });

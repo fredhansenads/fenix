@@ -40,7 +40,7 @@ Uso:
   node scripts/ops-check.js --with-smoke
 
 Objetivo:
-  Conferir rapidamente ambiente local, PostgreSQL, backups e scripts operacionais do FENIX.
+  Conferir rapidamente ambiente local, PostgreSQL, backups e scripts operacionais do SantusERP.
 
 Observacao:
   --with-smoke executa tambem scripts/smoke-test.js.
@@ -247,7 +247,7 @@ function addResult(name, status, detail) {
 }
 
 function printResults() {
-  console.log("Checklist operacional FENIX");
+  console.log("Checklist operacional SantusERP");
   results.forEach((result) => {
     const marker = result.status === "ok" ? "OK" : result.status === "aviso" ? "AVISO" : "FALHA";
     console.log(`[${marker}] ${result.name}: ${result.detail}`);

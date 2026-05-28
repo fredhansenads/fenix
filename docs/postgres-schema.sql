@@ -1,4 +1,4 @@
--- FENIX ERP - schema PostgreSQL inicial
+-- SantusERP - schema PostgreSQL inicial
 -- Objetivo: mapear o modelo atual do MVP para uma futura migracao do JSON local.
 
 CREATE TABLE users (

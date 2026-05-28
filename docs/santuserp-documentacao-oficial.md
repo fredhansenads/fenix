@@ -1,8 +1,8 @@
-# FÊNIX ERP - Documentacao oficial
+# SantusERP - Documentacao oficial
 
 ## 1. Visao geral
 
-O FÊNIX e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
+O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
 O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local e painel de saude do sistema.
 
@@ -20,14 +20,14 @@ O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevan
 Abra o PowerShell na pasta do projeto:
 
 ```powershell
-cd "C:\Users\PC-01\Documents\FÊNIX"
+cd "<pasta-do-projeto>"
 node server.js
 ```
 
 Ou use o inicializador local:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Open
+.\scripts\start-santuserp.ps1 -Open
 ```
 
 Acesse:
@@ -56,9 +56,9 @@ package.json                       Atalhos npm para operacao local
 .env.example                       Exemplo de configuracao local
 docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
-docs/fenix-checklist-operacional.md Checklist operacional local
-docs/fenix-ambiente-local.md       Guia de ambiente local
-scripts/start-fenix.ps1            Inicializador local Windows
+docs/santuserp-checklist-operacional.md Checklist operacional local
+docs/santuserp-ambiente-local.md       Guia de ambiente local
+scripts/start-santuserp.ps1            Inicializador local Windows
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
@@ -232,7 +232,7 @@ O painel de saude consulta a rota `GET /api/health` e exibe:
 
 ## 8. Persistencia de dados
 
-O FÊNIX possui persistencia hibrida:
+O SantusERP possui persistencia hibrida:
 
 - PostgreSQL quando `.env` define `DATABASE_URL` ou variaveis `PG*`.
 - JSON local em `data/fenix-db.json` quando nao ha PostgreSQL configurado.
@@ -363,7 +363,7 @@ Esse teste usa o banco configurado no `.env`, portanto deve ser executado em amb
 Checklist manual:
 
 ```text
-docs/fenix-checklist-operacional.md
+docs/santuserp-checklist-operacional.md
 ```
 
 Checklist automatizado:
@@ -385,13 +385,13 @@ Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais e, o
 Inicializador Windows:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Open
+.\scripts\start-santuserp.ps1 -Open
 ```
 
 Inicializador com checklist:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Check -Open
+.\scripts\start-santuserp.ps1 -Check -Open
 ```
 
 Atalhos `npm` disponiveis:
@@ -413,7 +413,7 @@ npm.cmd run check
 Guia operacional:
 
 ```text
-docs/fenix-ambiente-local.md
+docs/santuserp-ambiente-local.md
 ```
 
 ## 16. API local

@@ -1,6 +1,6 @@
-# FENIX - Guia de ambiente local
+# SantusERP - Guia de ambiente local
 
-Este guia resume como iniciar, validar e manter o ERP FENIX rodando localmente na maquina da SANTUS.
+Este guia resume como iniciar, validar e manter o ERP SantusERP rodando localmente na maquina da SANTUS.
 
 ## 1. Pre-requisitos
 
@@ -14,8 +14,8 @@ Este guia resume como iniciar, validar e manter o ERP FENIX rodando localmente n
 No PowerShell:
 
 ```powershell
-cd "C:\Users\PC-01\Documents\FÊNIX"
-.\scripts\start-fenix.ps1 -Open
+cd "<pasta-do-projeto>"
+.\scripts\start-santuserp.ps1 -Open
 ```
 
 O script inicia o servidor em:
@@ -36,13 +36,13 @@ santus123
 Para validar ambiente e iniciar o sistema em seguida:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Check -Open
+.\scripts\start-santuserp.ps1 -Check -Open
 ```
 
 Para executar apenas o checklist, sem iniciar o servidor:
 
 ```powershell
-.\scripts\start-fenix.ps1 -CheckOnly
+.\scripts\start-santuserp.ps1 -CheckOnly
 ```
 
 ## 4. Comandos npm
@@ -104,7 +104,7 @@ A porta padrao e `4173`.
 Para iniciar em outra porta:
 
 ```powershell
-.\scripts\start-fenix.ps1 -Port 4180 -Open
+.\scripts\start-santuserp.ps1 -Port 4180 -Open
 ```
 
 Ou:
@@ -138,7 +138,7 @@ Se a porta estiver ocupada:
 netstat -ano | findstr :4173
 ```
 
-Depois, finalize o processo pelo PID, se tiver certeza de que e uma instancia antiga do FENIX:
+Depois, finalize o processo pelo PID, se tiver certeza de que e uma instancia antiga do SantusERP:
 
 ```powershell
 Stop-Process -Id <PID> -Force
@@ -153,7 +153,7 @@ Se o login falhar:
 
 ## 9. Entrega operacional da Fase 2
 
-Com este guia, o FENIX passa a ter:
+Com este guia, o SantusERP passa a ter:
 
 - Comandos padronizados por `npm`.
 - Script PowerShell de inicializacao local.
