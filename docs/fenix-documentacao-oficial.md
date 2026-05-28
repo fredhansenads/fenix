@@ -388,7 +388,9 @@ Rotas usadas para compatibilidade com o modelo inicial do MVP. Quando a base ja 
 
 - `GET /api/bootstrap`
 
-Rota usada pelo frontend para carregar o estado inicial depois do login. Ela reduz a dependencia direta de `/api/state`, preservando `/api/state` como compatibilidade e fallback.
+O frontend tenta carregar o estado inicial primeiro pelas rotas modulares individuais. Se alguma colecao principal falhar, usa `/api/bootstrap`; se necessario, preserva `/api/state` como compatibilidade e fallback.
+
+O `/api/bootstrap` retorna os dados iniciais do ERP em uma unica chamada autenticada, reduzindo a dependencia direta de `/api/state`.
 
 ### Rotas modulares
 
@@ -516,15 +518,15 @@ Fase 2 em andamento avancado:
 - Restauracao assistida de backup.
 - Painel de saude do sistema.
 - Bootstrap autenticado e rota modular para notificacoes lidas.
+- Carregamento inicial por rotas modulares individuais com fallback para bootstrap e estado completo.
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
 
 ## 20. Proximas etapas recomendadas
 
-1. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
-2. Revisar UX/UI final da Fase 2 em desktop e mobile.
-3. Preparar empacotamento de ambiente local.
-4. Iniciar automacoes da Fase 3.
+1. Revisar UX/UI final da Fase 2 em desktop e mobile.
+2. Preparar empacotamento de ambiente local.
+3. Iniciar automacoes da Fase 3.
 
 ## 21. Criterios de sucesso
 

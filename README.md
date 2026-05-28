@@ -142,9 +142,11 @@ O carregamento principal autenticado usa:
 
 - `GET /api/bootstrap`
 
-Essa rota retorna os dados iniciais do ERP sem depender diretamente de `/api/state`, mantendo `/api/state` apenas como compatibilidade e fallback.
+O frontend tenta carregar as colecoes principais primeiro pelas rotas modulares individuais. Se alguma carga modular falhar, ele usa `/api/bootstrap`; se necessario, preserva `/api/state` como compatibilidade e fallback.
 
-E tambem expoe rotas por modulo para preparar a migracao futura:
+O `/api/bootstrap` retorna os dados iniciais do ERP sem depender diretamente de `/api/state`, mantendo `/api/state` apenas como rota de seguranca para compatibilidade.
+
+O servidor tambem expoe rotas por modulo:
 
 - `GET /api/clients`
 - `POST /api/clients`

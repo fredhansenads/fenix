@@ -5,7 +5,7 @@ const API_HEALTH_URL = "/api/health";
 const API_NOTIFICATION_READS_URL = "/api/notification-reads";
 const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
-const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
+const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
   { id: "dashboard", label: "Dashboard", title: "Visao geral", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
@@ -210,6 +210,11 @@ async function loadStateFromApi(token = "") {
   }
 
   if (token) {
+    const modularState = await loadStateFromModules(token);
+    if (modularState) {
+      return modularState;
+    }
+
     const bootstrapState = await loadStateFromBootstrap(token);
     if (bootstrapState) {
       return bootstrapState;
@@ -225,6 +230,55 @@ async function loadStateFromApi(token = "") {
       return null;
     }
     return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function loadStateFromModules(token) {
+  try {
+    const headers = { "Authorization": `Bearer ${token}` };
+    const notificationResponse = await fetch(API_NOTIFICATION_READS_URL, {
+      cache: "no-store",
+      headers
+    });
+    if (!notificationResponse.ok) {
+      return null;
+    }
+
+    const collectionEntries = await Promise.all([...API_COLLECTIONS].map(async (collection) => {
+      const response = await fetch(collectionApiPath(collection), {
+        cache: "no-store",
+        headers
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load ${collection}`);
+      }
+      const records = await response.json();
+      if (!Array.isArray(records)) {
+        throw new Error(`Invalid payload for ${collection}`);
+      }
+      return [collection, records];
+    }));
+
+    const activityResponse = await fetch("/api/activity-log?page=1&pageSize=20", {
+      cache: "no-store",
+      headers
+    });
+    const activityPayload = activityResponse.ok ? await activityResponse.json() : null;
+
+    const nextState = {
+      ...structuredClone(initialData),
+      session: null,
+      notificationReads: normalizeNotificationReads(await notificationResponse.json()),
+      auditLogs: Array.isArray(activityPayload?.items) ? activityPayload.items : []
+    };
+
+    collectionEntries.forEach(([collection, records]) => {
+      nextState[collection] = records;
+    });
+
+    return nextState;
   } catch {
     return null;
   }

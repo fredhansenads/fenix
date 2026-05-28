@@ -428,10 +428,10 @@ async function handleCollectionApi(request, response, collection, id) {
   if (request.method === "GET") {
     if (id) {
       const item = data[collection].find((record) => record.id === id);
-      sendJson(response, item ? 200 : 404, item || { error: "Record not found" });
+      sendJson(response, item ? 200 : 404, item ? sanitizeRecord(collection, item) : { error: "Record not found" });
       return;
     }
-    sendJson(response, 200, data[collection]);
+    sendJson(response, 200, data[collection].map((record) => sanitizeRecord(collection, record)));
     return;
   }
 
