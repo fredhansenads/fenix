@@ -24,6 +24,12 @@ cd "C:\Users\PC-01\Documents\FÊNIX"
 node server.js
 ```
 
+Ou use o inicializador local:
+
+```powershell
+.\scripts\start-fenix.ps1 -Open
+```
+
 Acesse:
 
 ```text
@@ -46,10 +52,13 @@ index.html                         Tela base do sistema
 styles.css                         Estilos responsivos
 app.js                             Frontend e regras de interface
 server.js                          Servidor local, API e persistencia
+package.json                       Atalhos npm para operacao local
 .env.example                       Exemplo de configuracao local
 docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
 docs/fenix-checklist-operacional.md Checklist operacional local
+docs/fenix-ambiente-local.md       Guia de ambiente local
+scripts/start-fenix.ps1            Inicializador local Windows
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
@@ -362,7 +371,43 @@ node scripts\ops-check.js --with-smoke
 
 Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais e, opcionalmente, os principais fluxos da API.
 
-## 15. API local
+## 15. Ambiente local empacotado
+
+Inicializador Windows:
+
+```powershell
+.\scripts\start-fenix.ps1 -Open
+```
+
+Inicializador com checklist:
+
+```powershell
+.\scripts\start-fenix.ps1 -Check -Open
+```
+
+Atalhos `npm` disponiveis:
+
+- `npm start`
+- `npm run check`
+- `npm run check:full`
+- `npm run smoke`
+- `npm run backup`
+- `npm run restore:list`
+- `npm run seed:demo`
+
+No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use `npm.cmd`, por exemplo:
+
+```powershell
+npm.cmd run check
+```
+
+Guia operacional:
+
+```text
+docs/fenix-ambiente-local.md
+```
+
+## 16. API local
 
 ### Autenticacao
 
@@ -447,7 +492,7 @@ Rotas vinculadas ao usuario autenticado. O frontend usa essas rotas para marcar 
 
 Restrita a `admin` e `gestor`.
 
-## 16. Regras de negocio atuais
+## 17. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -460,7 +505,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 17. Indicadores e relatorios
+## 18. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -481,7 +526,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 18. Status da Fase 1
+## 19. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -498,7 +543,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 19. Status da Fase 2
+## 20. Status da Fase 2
 
 Fase 2 em andamento avancado:
 
@@ -521,15 +566,15 @@ Fase 2 em andamento avancado:
 - Bootstrap autenticado e rota modular para notificacoes lidas.
 - Carregamento inicial por rotas modulares individuais com fallback para bootstrap e estado completo.
 - Revisao UX/UI final de listas, formularios e leitura em mobile.
+- Empacotamento local inicial com `package.json`, atalhos `npm`, inicializador PowerShell e guia de ambiente.
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
 
-## 20. Proximas etapas recomendadas
+## 21. Proximas etapas recomendadas
 
-1. Preparar empacotamento de ambiente local.
-2. Iniciar automacoes da Fase 3.
+1. Iniciar automacoes da Fase 3.
 
-## 21. Criterios de sucesso
+## 22. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

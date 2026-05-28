@@ -8,6 +8,7 @@ A documentacao consolidada do sistema esta em:
 
 - `docs/fenix-documentacao-oficial.md`
 - `docs/fenix-checklist-operacional.md`
+- `docs/fenix-ambiente-local.md`
 
 Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases e proximas etapas recomendadas.
 
@@ -19,6 +20,12 @@ Opcao recomendada: rode o servidor local e acesse `http://127.0.0.1:4173`.
 
 ```bash
 node server.js
+```
+
+No Windows, tambem e possivel usar o inicializador local:
+
+```powershell
+.\scripts\start-fenix.ps1 -Open
 ```
 
 ## Acesso inicial
@@ -118,6 +125,19 @@ Para incluir o smoke test na mesma checagem:
 ```bash
 node scripts/ops-check.js --with-smoke
 ```
+
+Atalhos equivalentes tambem estao disponiveis via `npm`:
+
+```bash
+npm start
+npm run check
+npm run check:full
+npm run backup
+```
+
+No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use `npm.cmd` nos mesmos comandos, por exemplo `npm.cmd run check`.
+
+O guia completo de ambiente local esta em `docs/fenix-ambiente-local.md`.
 
 ## API local
 

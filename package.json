@@ -1,0 +1,18 @@
+{
+  "name": "fenix-erp",
+  "version": "0.2.0",
+  "private": true,
+  "description": "ERP web FENIX da SANTUS",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node scripts/ops-check.js",
+    "check:full": "node scripts/ops-check.js --with-smoke",
+    "smoke": "node scripts/smoke-test.js",
+    "backup": "node scripts/backup-postgres.js",
+    "restore:list": "node scripts/restore-postgres.js --list",
+    "seed:demo": "node scripts/seed-postgres-demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

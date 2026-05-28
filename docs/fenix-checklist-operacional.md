@@ -9,6 +9,12 @@ cd "C:\Users\PC-01\Documents\FÊNIX"
 node server.js
 ```
 
+Opcao assistida no Windows:
+
+```powershell
+.\scripts\start-fenix.ps1 -Open
+```
+
 Acesse:
 
 ```text
@@ -28,6 +34,14 @@ Senha: santus123
 node scripts\ops-check.js
 ```
 
+Atalho equivalente:
+
+```powershell
+npm run check
+```
+
+Se o PowerShell bloquear `npm`, use `npm.cmd run check`.
+
 Esse comando verifica:
 
 - Node.js.
@@ -46,10 +60,22 @@ Para incluir o smoke test:
 node scripts\ops-check.js --with-smoke
 ```
 
+Atalho equivalente:
+
+```powershell
+npm run check:full
+```
+
 ## 3. Rodar smoke test
 
 ```powershell
 node scripts\smoke-test.js
+```
+
+Atalho equivalente:
+
+```powershell
+npm run smoke
 ```
 
 O smoke test valida:
@@ -67,6 +93,12 @@ O smoke test valida:
 node scripts\backup-postgres.js
 ```
 
+Atalho equivalente:
+
+```powershell
+npm run backup
+```
+
 Os arquivos sao criados em:
 
 ```text
@@ -79,6 +111,12 @@ Backups ficam fora do Git por padrao.
 
 ```powershell
 node scripts\restore-postgres.js --list
+```
+
+Atalho equivalente:
+
+```powershell
+npm run restore:list
 ```
 
 ## 6. Simular restauracao
@@ -122,10 +160,10 @@ Conferir:
 
 ## 10. Rotina recomendada antes de apresentacoes
 
-1. Rodar `node scripts\ops-check.js`.
-2. Rodar `node scripts\smoke-test.js`.
-3. Gerar backup com `node scripts\backup-postgres.js`.
-4. Iniciar `node server.js`.
+1. Rodar `npm run check`.
+2. Rodar `npm run smoke`.
+3. Gerar backup com `npm run backup`.
+4. Iniciar `.\scripts\start-fenix.ps1 -Open`.
 5. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
 6. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
 
@@ -138,4 +176,3 @@ Conferir:
 5. Conferir painel de saude.
 6. Salvar no Git.
 7. Enviar ao GitHub.
-
