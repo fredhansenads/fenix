@@ -49,11 +49,13 @@ server.js                          Servidor local, API e persistencia
 .env.example                       Exemplo de configuracao local
 docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
+docs/fenix-checklist-operacional.md Checklist operacional local
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
 scripts/restore-postgres.js        Restauracao assistida do PostgreSQL
 scripts/smoke-test.js              Validacao automatizada basica
+scripts/ops-check.js               Checklist operacional automatizado
 ```
 
 Arquivos sensiveis e dados locais nao devem ir para o Git:
@@ -338,7 +340,29 @@ Fluxos validados:
 
 Esse teste usa o banco configurado no `.env`, portanto deve ser executado em ambiente local/controlado.
 
-## 14. API local
+## 14. Checklist operacional
+
+Checklist manual:
+
+```text
+docs/fenix-checklist-operacional.md
+```
+
+Checklist automatizado:
+
+```powershell
+node scripts\ops-check.js
+```
+
+Checklist automatizado com smoke test:
+
+```powershell
+node scripts\ops-check.js --with-smoke
+```
+
+Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais e, opcionalmente, os principais fluxos da API.
+
+## 15. API local
 
 ### Autenticacao
 
@@ -421,7 +445,7 @@ Rotas vinculadas ao usuario autenticado. O frontend usa essas rotas para marcar 
 
 Restrita a `admin` e `gestor`.
 
-## 15. Regras de negocio atuais
+## 16. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -434,7 +458,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 16. Indicadores e relatorios
+## 17. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -455,7 +479,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 17. Status da Fase 1
+## 18. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -472,7 +496,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 18. Status da Fase 2
+## 19. Status da Fase 2
 
 Fase 2 em andamento avancado:
 
@@ -493,16 +517,16 @@ Fase 2 em andamento avancado:
 - Painel de saude do sistema.
 - Bootstrap autenticado e rota modular para notificacoes lidas.
 - Smoke test automatizado.
+- Checklist operacional manual e automatizado.
 
-## 19. Proximas etapas recomendadas
+## 20. Proximas etapas recomendadas
 
 1. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
 2. Revisar UX/UI final da Fase 2 em desktop e mobile.
-3. Consolidar checklist operacional de execucao, backup, restore e validacao.
-4. Preparar empacotamento de ambiente local.
-5. Iniciar automacoes da Fase 3.
+3. Preparar empacotamento de ambiente local.
+4. Iniciar automacoes da Fase 3.
 
-## 20. Criterios de sucesso
+## 21. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

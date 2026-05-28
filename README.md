@@ -7,8 +7,9 @@ Este repositorio contem o primeiro MVP web do FÊNIX, o ERP da SANTUS.
 A documentacao consolidada do sistema esta em:
 
 - `docs/fenix-documentacao-oficial.md`
+- `docs/fenix-checklist-operacional.md`
 
-Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, status das fases e proximas etapas recomendadas.
+Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases e proximas etapas recomendadas.
 
 ## Como abrir
 
@@ -104,6 +105,18 @@ node scripts/smoke-test.js
 ```
 
 O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, criacao/edicao/exclusao de cliente, auditoria paginada e notificacoes lidas.
+
+Para conferir ambiente, banco, backups e scripts operacionais:
+
+```bash
+node scripts/ops-check.js
+```
+
+Para incluir o smoke test na mesma checagem:
+
+```bash
+node scripts/ops-check.js --with-smoke
+```
 
 ## API local
 
