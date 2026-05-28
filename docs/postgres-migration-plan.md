@@ -14,6 +14,7 @@ Status em maio de 2026:
 - `scripts/seed-postgres-demo.js` existe para popular dados demonstrativos completos.
 - `scripts/backup-postgres.js` gera backups SQL locais.
 - `scripts/restore-postgres.js` lista backups, simula restauracao e restaura com confirmacao explicita.
+- `scripts/smoke-test.js` executa validacao automatizada basica contra a API local.
 - Painel `Configuracoes > Saude do sistema` consulta `GET /api/health` e confirma a persistencia ativa.
 - Tabela `user_sessions` registra sessoes persistentes com hash do token quando PostgreSQL esta ativo.
 - Rota `GET /api/bootstrap` carrega dados iniciais autenticados sem depender diretamente de `/api/state`.
@@ -126,6 +127,7 @@ A carga deve respeitar dependencias entre tabelas:
 - Criar, editar e excluir um registro de teste em modulo nao critico.
 - Confirmar que a auditoria registra o teste.
 - Confirmar que senhas nao aparecem em nenhuma resposta publica da API.
+- Rodar `node scripts/smoke-test.js`.
 
 ## Estrategia de rollback
 

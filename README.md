@@ -97,6 +97,14 @@ Para restaurar de verdade o backup mais recente:
 node scripts/restore-postgres.js --latest --apply --confirm=RESTORE
 ```
 
+Para rodar uma validacao automatizada basica do sistema:
+
+```bash
+node scripts/smoke-test.js
+```
+
+O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, criacao/edicao/exclusao de cliente, auditoria paginada e notificacoes lidas.
+
 ## API local
 
 Autenticacao local:

@@ -53,6 +53,7 @@ scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
 scripts/restore-postgres.js        Restauracao assistida do PostgreSQL
+scripts/smoke-test.js              Validacao automatizada basica
 ```
 
 Arquivos sensiveis e dados locais nao devem ir para o Git:
@@ -312,7 +313,32 @@ node scripts\restore-postgres.js --latest --apply --confirm=RESTORE
 
 A restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. Em seguida, limpa o schema `public` e aplica o `.sql`. Esse fluxo e destrutivo para o banco atual e deve ser usado apenas quando a restauracao for realmente desejada.
 
-## 13. API local
+## 13. Testes basicos
+
+Para executar uma validacao automatizada basica:
+
+```powershell
+node scripts\smoke-test.js
+```
+
+O teste sobe uma instancia temporaria da API em:
+
+```text
+http://127.0.0.1:4193
+```
+
+Fluxos validados:
+
+- Login administrativo.
+- Health check.
+- Bootstrap autenticado.
+- Criacao, edicao e exclusao de cliente temporario.
+- Auditoria paginada.
+- Notificacoes lidas.
+
+Esse teste usa o banco configurado no `.env`, portanto deve ser executado em ambiente local/controlado.
+
+## 14. API local
 
 ### Autenticacao
 
@@ -395,7 +421,7 @@ Rotas vinculadas ao usuario autenticado. O frontend usa essas rotas para marcar 
 
 Restrita a `admin` e `gestor`.
 
-## 14. Regras de negocio atuais
+## 15. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -408,7 +434,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 15. Indicadores e relatorios
+## 16. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -429,7 +455,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 16. Status da Fase 1
+## 17. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -446,7 +472,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 17. Status da Fase 2
+## 18. Status da Fase 2
 
 Fase 2 em andamento avancado:
 
@@ -466,17 +492,17 @@ Fase 2 em andamento avancado:
 - Restauracao assistida de backup.
 - Painel de saude do sistema.
 - Bootstrap autenticado e rota modular para notificacoes lidas.
+- Smoke test automatizado.
 
-## 18. Proximas etapas recomendadas
+## 19. Proximas etapas recomendadas
 
 1. Carregar colecoes principais por rotas modulares individuais quando fizer sentido.
-2. Adicionar testes automatizados basicos.
-3. Revisar UX/UI final da Fase 2 em desktop e mobile.
-4. Consolidar checklist operacional de execucao, backup, restore e validacao.
-5. Preparar empacotamento de ambiente local.
-6. Iniciar automacoes da Fase 3.
+2. Revisar UX/UI final da Fase 2 em desktop e mobile.
+3. Consolidar checklist operacional de execucao, backup, restore e validacao.
+4. Preparar empacotamento de ambiente local.
+5. Iniciar automacoes da Fase 3.
 
-## 19. Criterios de sucesso
+## 20. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 
