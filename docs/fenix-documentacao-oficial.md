@@ -93,6 +93,7 @@ backups/*.dump
 - Tarefas.
 - Relatorios executivos.
 - Notificacoes internas.
+- Automacoes iniciais.
 - Historico de atividades.
 - Configuracoes administrativas.
 - Saude do sistema.
@@ -195,6 +196,14 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Contratos vencidos ou proximos do vencimento.
 - Marcar como lida individualmente ou em lote.
 - Contador superior apenas para notificacoes nao lidas.
+
+### Automacoes
+
+- Central de automacoes da Fase 3.
+- Deteccao de contas vencidas, propostas criticas e contratos proximos do vencimento.
+- Geracao automatica de tarefas de acompanhamento.
+- Marcador interno de automacao para evitar tarefas duplicadas.
+- Leitura de itens ja automatizados e itens ainda pendentes.
 
 ### Historico de atividades
 
@@ -545,7 +554,7 @@ Fase 1 concluida no escopo do MVP:
 
 ## 20. Status da Fase 2
 
-Fase 2 em andamento avancado:
+Fase 2 concluida no escopo planejado:
 
 - Contratos implementados.
 - Relatorios avancados iniciados.
@@ -570,11 +579,23 @@ Fase 2 em andamento avancado:
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
 
-## 21. Proximas etapas recomendadas
+## 21. Status da Fase 3
 
-1. Iniciar automacoes da Fase 3.
+Fase 3 iniciada:
 
-## 22. Criterios de sucesso
+- Modulo de automacoes iniciais.
+- Deteccao de pendencias financeiras vencidas.
+- Deteccao de propostas criticas.
+- Deteccao de contratos proximos do vencimento.
+- Geracao automatica de tarefas de acompanhamento.
+- Marcadores internos para evitar duplicidade de tarefas automatizadas.
+
+## 22. Proximas etapas recomendadas
+
+1. Expandir automacoes com regras configuraveis.
+2. Iniciar assistente de IA para analise executiva.
+
+## 23. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

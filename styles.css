@@ -50,6 +50,22 @@ button:hover {
   background: var(--primary-dark);
 }
 
+button:disabled,
+button.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button:disabled:hover,
+button.disabled:hover {
+  background: var(--primary);
+}
+
+button.secondary:disabled:hover,
+button.secondary.disabled:hover {
+  background: #e8eee9;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -813,6 +829,25 @@ label {
 
 .notification-danger {
   border-left-color: var(--danger);
+}
+
+.automation-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.automation-card .panel-body {
+  display: grid;
+  gap: 14px;
+}
+
+.automation-card .panel-body > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.automation-items {
+  margin-top: 2px;
 }
 
 .chart-bars {

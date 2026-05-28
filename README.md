@@ -50,6 +50,7 @@ No Windows, tambem e possivel usar o inicializador local:
 - Tarefas
 - Relatorios executivos com exportacao CSV
 - Notificacoes internas
+- Automacoes iniciais para gerar tarefas de acompanhamento
 - Historico de atividades
 - Configuracoes administrativas
 - Listas responsivas com leitura otimizada no mobile

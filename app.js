@@ -18,6 +18,7 @@ const modules = [
   { id: "tasks", label: "Tarefas", title: "Tarefas", roles: ["admin", "gestor", "operacional", "colaborador"] },
   { id: "reports", label: "Relatorios", title: "Relatorios", roles: ["admin", "gestor", "financeiro", "comercial"] },
   { id: "notifications", label: "Notificacoes", title: "Notificacoes internas", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
+  { id: "automations", label: "Automacoes", title: "Automacoes", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
   { id: "activity", label: "Historico", title: "Historico de atividades", roles: ["admin", "gestor"] },
   { id: "users", label: "Usuarios", title: "Usuarios e permissoes", roles: ["admin"] },
   { id: "settings", label: "Configuracoes", title: "Configuracoes administrativas", roles: ["admin"] }
@@ -687,6 +688,7 @@ function navigate(moduleId) {
     tasks: () => renderCrud("tasks"),
     reports: renderReports,
     notifications: renderNotifications,
+    automations: renderAutomations,
     activity: renderActivity,
     users: () => renderCrud("users"),
     settings: renderSettings
@@ -1053,6 +1055,79 @@ function isNotificationRead(notification) {
 
 function getUnreadNotifications(notifications = buildNotifications()) {
   return notifications.filter((notification) => !isNotificationRead(notification));
+}
+
+function buildAutomationRules() {
+  const todayValue = today();
+  const weekLimit = addDays(7);
+  const contractLimit = addDays(15);
+
+  return [
+    {
+      id: "finance-overdue",
+      area: "Financeiro",
+      tone: "danger",
+      title: "Gerar tarefas para contas vencidas",
+      description: "Cria uma tarefa operacional para cada conta a pagar ou receber vencida que ainda nao possui acompanhamento automatizado.",
+      items: [
+        ...state.payables
+          .filter((item) => item.status === "pendente" && item.dueDate && item.dueDate < todayValue)
+          .map((item) => automationItem("payables", item, `Regularizar conta a pagar: ${item.description}`, `Conta a pagar vencida em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`, "alta", todayValue)),
+        ...state.receivables
+          .filter((item) => item.status === "pendente" && item.dueDate && item.dueDate < todayValue)
+          .map((item) => automationItem("receivables", item, `Cobrar conta a receber: ${item.description}`, `Conta a receber vencida em ${formatDate(item.dueDate)} no valor de ${money(item.amount)}.`, "alta", todayValue))
+      ]
+    },
+    {
+      id: "commercial-followup",
+      area: "Comercial",
+      tone: "warning",
+      title: "Gerar tarefas para propostas criticas",
+      description: "Cria tarefas de follow-up para propostas em rascunho ou enviadas que venceram ou vencem nos proximos 7 dias.",
+      items: state.proposals
+        .filter((item) => ["rascunho", "enviada"].includes(item.status) && item.validUntil && item.validUntil <= weekLimit)
+        .map((item) => automationItem("proposals", item, `Acompanhar proposta: ${item.title}`, `Proposta ${labelize(item.status)} com validade em ${formatDate(item.validUntil)} e valor de ${money(item.amount)}.`, "media", item.validUntil < todayValue ? todayValue : item.validUntil))
+    },
+    {
+      id: "contract-review",
+      area: "Contratos",
+      tone: "warning",
+      title: "Gerar tarefas para revisao contratual",
+      description: "Cria tarefas para contratos ativos ou suspensos que venceram ou vencem nos proximos 15 dias.",
+      items: state.contracts
+        .filter((item) => ["ativo", "suspenso"].includes(item.status) && item.endDate && item.endDate <= contractLimit)
+        .map((item) => automationItem("contracts", item, `Revisar contrato: ${item.title}`, `Contrato ${item.contractNumber || item.title} com termino em ${formatDate(item.endDate)} e valor de ${money(item.amount)}.`, "media", item.endDate < todayValue ? todayValue : item.endDate))
+    }
+  ].map((rule) => {
+    const pendingItems = rule.items.filter((item) => !automationTaskExists(item.key));
+    return {
+      ...rule,
+      pendingItems,
+      generatedCount: rule.items.length - pendingItems.length
+    };
+  });
+}
+
+function automationItem(collection, record, title, description, priority, dueDate) {
+  const key = automationMarker(collection, record.id);
+  return {
+    key,
+    collection,
+    recordId: record.id,
+    recordLabel: record.title || record.description || record.name || record.id,
+    title,
+    description,
+    priority,
+    dueDate
+  };
+}
+
+function automationMarker(collection, id) {
+  return `[AUTO:${collection}:${id || "registro"}]`;
+}
+
+function automationTaskExists(key) {
+  return state.tasks.some((task) => String(task.description || "").includes(key));
 }
 
 function formatDate(value) {
@@ -2239,6 +2314,156 @@ async function markNotificationRead(id, shouldRender = true) {
     renderNotifications();
     toast("Notificacao marcada como lida.");
   }
+}
+
+function renderAutomations() {
+  const rules = buildAutomationRules();
+  const totalCandidates = rules.reduce((total, rule) => total + rule.items.length, 0);
+  const totalPending = rules.reduce((total, rule) => total + rule.pendingItems.length, 0);
+  const totalGenerated = rules.reduce((total, rule) => total + rule.generatedCount, 0);
+  const automationContext = {
+    canCreateTasks: canCreate("tasks"),
+    hasProject: Boolean(getAutomationDefaultProjectId())
+  };
+
+  content.innerHTML = `
+    <section class="grid three-columns">
+      ${kpi("Oportunidades detectadas", totalCandidates, totalCandidates ? "warning" : "success")}
+      ${kpi("Tarefas a gerar", totalPending, totalPending ? "danger" : "success")}
+      ${kpi("Ja automatizadas", totalGenerated, "neutral")}
+    </section>
+    <section class="toolbar">
+      <div>
+        <p class="eyebrow">Fase 3</p>
+        <h3>Central de automacoes</h3>
+        <p>Analise vencimentos e gere tarefas de acompanhamento com rastreio automatico.</p>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" class="secondary" data-goto="tasks">Ver tarefas</button>
+        <button type="button" class="secondary" data-goto="notifications">Ver notificacoes</button>
+      </div>
+    </section>
+    <section class="automation-grid">
+      ${rules.map((rule) => renderAutomationRule(rule, automationContext)).join("")}
+    </section>
+  `;
+  bindAutomations();
+  bindGoToButtons();
+}
+
+function renderAutomationRule(rule, context) {
+  const disabled = !rule.pendingItems.length || !context.canCreateTasks || !context.hasProject;
+  const reason = !context.canCreateTasks
+    ? "Seu perfil pode visualizar esta automacao, mas nao pode criar tarefas."
+    : !context.hasProject
+      ? "Cadastre um projeto antes de gerar tarefas automaticas."
+    : rule.pendingItems.length
+      ? `${rule.pendingItems.length} tarefa${rule.pendingItems.length === 1 ? "" : "s"} pronta${rule.pendingItems.length === 1 ? "" : "s"} para geracao.`
+      : "Nada pendente para gerar agora.";
+
+  return `
+    <article class="panel automation-card">
+      <div class="panel-header">
+        <div>
+          <span class="status ${rule.tone}">${rule.area}</span>
+          <h3>${rule.title}</h3>
+          <span class="panel-subtitle">${reason}</span>
+        </div>
+        <button type="button" data-run-automation="${rule.id}" ${disabled ? "disabled" : ""}>Gerar tarefas</button>
+      </div>
+      <div class="panel-body">
+        <p>${rule.description}</p>
+        ${renderAutomationItems(rule)}
+      </div>
+    </article>
+  `;
+}
+
+function renderAutomationItems(rule) {
+  if (!rule.items.length) {
+    return `<div class="empty-state compact">Nenhuma ocorrencia encontrada para esta regra.</div>`;
+  }
+
+  return `
+    <div class="info-list automation-items">
+      ${rule.items.slice(0, 6).map((item) => {
+        const generated = automationTaskExists(item.key);
+        return `
+          <article class="info-item split">
+            <div>
+              <strong>${escapeHtml(item.recordLabel)}</strong>
+              <span>${escapeHtml(item.title)} · prazo ${formatDate(item.dueDate)}</span>
+            </div>
+            <span class="status ${generated ? "success" : "warning"}">${generated ? "gerada" : "pendente"}</span>
+          </article>
+        `;
+      }).join("")}
+      ${rule.items.length > 6 ? `<p class="panel-subtitle">Mais ${rule.items.length - 6} ocorrencia${rule.items.length - 6 === 1 ? "" : "s"} nesta regra.</p>` : ""}
+    </div>
+  `;
+}
+
+function bindAutomations() {
+  content.querySelectorAll("[data-run-automation]").forEach((button) => {
+    button.addEventListener("click", () => runAutomation(button.dataset.runAutomation));
+  });
+}
+
+async function runAutomation(ruleId) {
+  if (!canCreate("tasks")) {
+    toast("Seu perfil nao possui permissao para criar tarefas.");
+    return;
+  }
+
+  const projectId = getAutomationDefaultProjectId();
+  if (!projectId) {
+    toast("Cadastre um projeto antes de gerar tarefas automaticas.");
+    return;
+  }
+
+  const rule = buildAutomationRules().find((item) => item.id === ruleId);
+  if (!rule || !rule.pendingItems.length) {
+    toast("Nao ha tarefas pendentes para esta automacao.");
+    renderAutomations();
+    return;
+  }
+
+  const previousTasks = state.tasks.map((task) => ({ ...task }));
+  let created = 0;
+
+  for (const item of rule.pendingItems) {
+    const task = {
+      id: uid(),
+      projectId,
+      title: item.title,
+      description: `${item.description}\n${item.key}`,
+      responsibleId: state.session?.userId || state.users[0]?.id || "",
+      priority: item.priority,
+      status: "pendente",
+      dueDate: item.dueDate,
+      completedAt: ""
+    };
+    state.tasks.push(task);
+    await saveRecordToApi("tasks", task, false);
+    if (lastApiError) {
+      state.tasks = previousTasks;
+      if (lastApiError.status === 401) return;
+      toast(apiErrorMessage("Nao foi possivel executar a automacao."));
+      renderAutomations();
+      return;
+    }
+    created += 1;
+  }
+
+  saveState();
+  toast(`${created} tarefa${created === 1 ? "" : "s"} gerada${created === 1 ? "" : "s"} pela automacao.`);
+  renderAutomations();
+}
+
+function getAutomationDefaultProjectId() {
+  return state.projects.find((project) => !["concluido", "cancelado"].includes(project.status))?.id
+    || state.projects[0]?.id
+    || "";
 }
 
 function renderActivity() {
