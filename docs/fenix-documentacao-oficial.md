@@ -509,6 +509,7 @@ Fase 2 em andamento avancado:
 - Notificacoes internas.
 - Exportacao de relatorios.
 - Melhorias de UX/UI.
+- Tabelas responsivas em formato de cartoes no mobile.
 - Auditoria inicial.
 - Auditoria paginada.
 - PostgreSQL local integrado.
@@ -519,14 +520,14 @@ Fase 2 em andamento avancado:
 - Painel de saude do sistema.
 - Bootstrap autenticado e rota modular para notificacoes lidas.
 - Carregamento inicial por rotas modulares individuais com fallback para bootstrap e estado completo.
+- Revisao UX/UI final de listas, formularios e leitura em mobile.
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
 
 ## 20. Proximas etapas recomendadas
 
-1. Revisar UX/UI final da Fase 2 em desktop e mobile.
-2. Preparar empacotamento de ambiente local.
-3. Iniciar automacoes da Fase 3.
+1. Preparar empacotamento de ambiente local.
+2. Iniciar automacoes da Fase 3.
 
 ## 21. Criterios de sucesso
 

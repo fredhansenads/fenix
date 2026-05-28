@@ -45,6 +45,7 @@ node server.js
 - Notificacoes internas
 - Historico de atividades
 - Configuracoes administrativas
+- Listas responsivas com leitura otimizada no mobile
 
 ## Observacao tecnica
 

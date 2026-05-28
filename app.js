@@ -1301,11 +1301,11 @@ function renderTable(schemaId, items, actions = true, query = "", status = "") {
   }
   const headings = schema.columns.map((column) => `<th>${columnLabel(column)}</th>`).join("");
   const rows = items.map((item) => {
-    const cells = schema.columns.map((column) => `<td>${formatCell(column, item[column])}</td>`).join("");
-    const actionCell = showActions ? `<td><div class="table-actions">${renderRowActions(schemaId, item.id)}</div></td>` : "";
+    const cells = schema.columns.map((column) => `<td data-label="${columnLabel(column)}">${formatCell(column, item[column])}</td>`).join("");
+    const actionCell = showActions ? `<td class="is-actions" data-label="Acoes"><div class="table-actions">${renderRowActions(schemaId, item.id)}</div></td>` : "";
     return `<tr class="${rowToneClass(schemaId, item)}">${cells}${actionCell}</tr>`;
   }).join("");
-  return `<table class="data-table"><thead><tr>${headings}${showActions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="data-table responsive-table"><thead><tr>${headings}${showActions ? "<th>Acoes</th>" : ""}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderRowActions(schemaId, id) {
@@ -2536,20 +2536,20 @@ function renderActivityTable(logs) {
   }
 
   return `
-    <table class="data-table">
+    <table class="data-table responsive-table">
       <thead>
         <tr><th>Data</th><th>Acao</th><th>Modulo</th><th>Registro</th><th>Usuario</th><th>Campos</th><th>Leitura</th></tr>
       </thead>
       <tbody>
         ${logs.map((log) => `
           <tr>
-            <td>${formatDateTime(log.createdAt)}</td>
-            <td><span class="status ${activityTone(log.action)}">${activityActionLabel(log.action)}</span></td>
-            <td>${activityCollectionLabel(log.collection)}</td>
-            <td>${escapeHtml(log.recordLabel || log.recordId || "-")}</td>
-            <td>${escapeHtml(log.actorName || "Usuario local")}</td>
-            <td>${formatChangedFields(log.changedFields)}</td>
-            <td>${activityReading(log)}</td>
+            <td data-label="Data">${formatDateTime(log.createdAt)}</td>
+            <td data-label="Acao"><span class="status ${activityTone(log.action)}">${activityActionLabel(log.action)}</span></td>
+            <td data-label="Modulo">${activityCollectionLabel(log.collection)}</td>
+            <td data-label="Registro">${escapeHtml(log.recordLabel || log.recordId || "-")}</td>
+            <td data-label="Usuario">${escapeHtml(log.actorName || "Usuario local")}</td>
+            <td data-label="Campos">${formatChangedFields(log.changedFields)}</td>
+            <td data-label="Leitura">${activityReading(log)}</td>
           </tr>
         `).join("")}
       </tbody>
