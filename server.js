@@ -240,6 +240,11 @@ async function handleApi(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/company-profile") {
+    await handleCompanyProfileApi(request, response);
+    return;
+  }
+
   const match = requestUrl.pathname.match(/^\/api\/([a-z]+)(?:\/([^/]+))?$/);
   if (match && collections.has(match[1])) {
     await handleCollectionApi(request, response, match[1], match[2]);
@@ -766,6 +771,62 @@ async function handleComplianceAnonymizeClientApi(request, response) {
   });
 }
 
+async function handleCompanyProfileApi(request, response) {
+  if (!["GET", "PUT"].includes(request.method)) {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
+
+  const session = await getSessionFromRequest(request);
+  const database = await readDatabase();
+  const data = database.exists ? ensureTenantModel(database.data) : {};
+  data.tenants = Array.isArray(data.tenants) ? data.tenants : [];
+  const tenantIndex = data.tenants.findIndex((tenant) => tenant.id === session.tenantId);
+  if (tenantIndex === -1) {
+    sendJson(response, 404, { error: "Tenant not found" });
+    return;
+  }
+
+  if (request.method === "GET") {
+    sendJson(response, 200, sanitizeCompanyProfile(data.tenants[tenantIndex]));
+    return;
+  }
+
+  const payload = await parseJsonBody(request, response);
+  if (!payload) return;
+
+  const previousTenant = data.tenants[tenantIndex];
+  const nextTenant = {
+    ...previousTenant,
+    name: String(payload.name || previousTenant.name || "").trim(),
+    document: String(payload.document || previousTenant.document || "").trim(),
+    email: String(payload.email || "").trim(),
+    phone: String(payload.phone || "").trim(),
+    notes: String(payload.notes || "").trim(),
+    settings: normalizeTenantSettings({
+      ...previousTenant.settings,
+      ...(payload.settings && typeof payload.settings === "object" ? payload.settings : {})
+    })
+  };
+
+  const validation = validateRecord("tenants", nextTenant);
+  if (!validation.valid) {
+    sendJson(response, 400, validation);
+    return;
+  }
+
+  data.tenants[tenantIndex] = nextTenant;
+  const auditLog = await addActivityLog(data, request, "updated", "tenants", nextTenant, previousTenant);
+  await writeDatabase(data);
+  sendJson(response, 200, {
+    ok: true,
+    company: sanitizeCompanyProfile(nextTenant),
+    auditLog
+  });
+}
+
 async function handleCollectionApi(request, response, collection, id) {
   const database = await readDatabase();
   const session = await getSessionFromRequest(request);
@@ -1208,6 +1269,29 @@ function sanitizeRecord(collection, record) {
   return collection === "users" ? sanitizeUser(record) : record;
 }
 
+function sanitizeCompanyProfile(tenant) {
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    document: tenant.document,
+    email: tenant.email || "",
+    phone: tenant.phone || "",
+    status: tenant.status,
+    notes: tenant.notes || "",
+    settings: normalizeTenantSettings(tenant.settings)
+  };
+}
+
+function normalizeTenantSettings(settings = {}) {
+  const defaultPageSize = Number(settings.defaultPageSize || 10);
+  return {
+    onboardingCompleted: Boolean(settings.onboardingCompleted),
+    defaultPageSize: [10, 20, 50].includes(defaultPageSize) ? defaultPageSize : 10,
+    compactTables: Boolean(settings.compactTables),
+    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : "executivo"
+  };
+}
+
 function ensureTenantModel(data) {
   const next = data || {};
   let changed = false;
@@ -1223,10 +1307,19 @@ function ensureTenantModel(data) {
       email: "admin@santus.com",
       phone: "",
       status: "ativo",
-      notes: "Empresa padrao criada para migrar os dados existentes."
+      notes: "Empresa padrao criada para migrar os dados existentes.",
+      settings: normalizeTenantSettings()
     });
     changed = true;
   }
+
+  next.tenants.forEach((tenant) => {
+    const settings = normalizeTenantSettings(tenant.settings);
+    if (JSON.stringify(tenant.settings || {}) !== JSON.stringify(settings)) {
+      tenant.settings = settings;
+      changed = true;
+    }
+  });
 
   tenantScopedCollections.forEach((collection) => {
     next[collection] = Array.isArray(next[collection]) ? next[collection] : [];
@@ -1900,7 +1993,8 @@ SELECT jsonb_build_object(
     'email', email,
     'phone', phone,
     'status', status,
-    'notes', notes
+    'notes', notes,
+    'settings', settings
   ) ORDER BY created_at) FROM tenants), '[]'::jsonb),
   'auditLogs', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
@@ -2053,7 +2147,7 @@ WHERE expires_at > now()
 TRUNCATE password_reset_tokens, notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO tenants (id, name, document, email, phone, status, notes)
+INSERT INTO tenants (id, name, document, email, phone, status, notes, settings)
 SELECT
   record->>'id',
   record->>'name',
@@ -2061,7 +2155,8 @@ SELECT
   record->>'email',
   record->>'phone',
   record->>'status',
-  record->>'notes'
+  record->>'notes',
+  COALESCE(record->'settings', '{}'::jsonb)
 FROM payload, jsonb_array_elements(COALESCE(data->'tenants', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)

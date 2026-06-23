@@ -12,6 +12,7 @@ Status geral atual:
 - Etapa 3 deste roadmap concluida: migrations PostgreSQL versionadas, tabela `schema_migrations`, comandos de aplicacao/listagem/dry-run e aplicacao automatica pelo servidor.
 - Etapa 4 deste roadmap concluida: ambientes documentados, modelos de `.env`, processo de servico, release, rollback e exigencia de PostgreSQL em producao.
 - Etapa 5 deste roadmap concluida como entrega inicial: politica de senha forte, recuperacao de senha com token temporario, auditoria de login/logout/falhas, rate limit em recuperacao e rotas LGPD para exportacao e anonimizacao controlada.
+- Etapa 6 deste roadmap concluida: onboarding inicial, perfil da empresa, preferencias por empresa, listas paginadas, guia rapido e feedback visual de salvamento.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -160,22 +161,26 @@ Tornar o sistema confortavel para uso por clientes externos, nao apenas uso inte
 
 Entregas principais:
 
-- Onboarding inicial.
-- Tela de perfil da empresa.
-- Preferencias do sistema.
-- Textos e mensagens revisados.
-- Estados vazios mais orientados.
-- Feedback visual para loading/salvamento.
-- Melhorias em filtros e buscas.
-- Paginacao em listas maiores.
-- Revisao mobile/tablet/desktop.
-- Guia rapido de uso.
+- Onboarding inicial. Concluido no dashboard com checklist operacional.
+- Tela de perfil da empresa. Concluida em Configuracoes.
+- Preferencias do sistema. Concluidas por empresa com pagina por lista, foco do dashboard, tabelas compactas e onboarding.
+- Textos e mensagens revisados. Melhorados em onboarding, guia rapido e configuracoes.
+- Estados vazios mais orientados. Mantidos e integrados com acoes rapidas.
+- Feedback visual para loading/salvamento. Concluido em formularios principais e configuracoes.
+- Melhorias em filtros e buscas. Mantidas com reset de pagina ao filtrar.
+- Paginacao em listas maiores. Concluida nas listas CRUD principais.
+- Revisao mobile/tablet/desktop. Estilos responsivos ajustados para onboarding e guia rapido.
+- Guia rapido de uso. Concluido em Configuracoes.
 
 Criterio de conclusao:
 
 - Usuario novo consegue iniciar sem treinamento extenso.
 - Fluxos principais sao claros.
 - Sistema funciona bem em telas comuns de notebook e celular.
+
+Status:
+
+- Concluido.
 
 ## 7. Completar funcionalidades essenciais de produto
 
@@ -285,7 +290,7 @@ Criterio de conclusao:
 3. Criar migrations formais. Concluido.
 4. Preparar deploy/homologacao/producao. Concluido.
 5. Reforcar compliance e auditoria. Concluido como base inicial.
-6. Melhorar UX/onboarding.
+6. Melhorar UX/onboarding. Concluido.
 7. Completar funcionalidades essenciais de produto.
 8. Ampliar testes e QA.
 9. Implantar monitoramento.
@@ -293,12 +298,12 @@ Criterio de conclusao:
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 6 - melhorar UX para cliente real**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy e camada inicial de seguranca/compliance.
+A proxima etapa mais importante e a **Etapa 7 - completar funcionalidades essenciais de produto**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial e experiencia mais adequada para uso por cliente real.
 
-Primeira entrega sugerida da Etapa 6:
+Primeira entrega sugerida da Etapa 7:
 
-- Criar onboarding inicial para primeira configuracao.
-- Melhorar textos de estados vazios e feedback de carregamento/salvamento.
-- Revisar Configuracoes para perfil da empresa e preferencias.
-- Fazer uma rodada visual responsiva em notebook, tablet e celular.
+- Convite de usuarios por empresa.
+- Configuracoes funcionais do cliente alem das preferencias visuais.
+- Relatorios profissionais com modelos/exportacoes mais consistentes.
+- Automacoes configuraveis por empresa.
 

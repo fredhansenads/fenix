@@ -57,6 +57,30 @@ async function main() {
   assert(Array.isArray(bootstrap.users) && bootstrap.users.length > 0, "Bootstrap nao retornou usuarios.");
   assert(Array.isArray(bootstrap.clients), "Bootstrap nao retornou clientes.");
 
+  const companyProfile = await request("/api/company-profile", { headers });
+  assert(companyProfile.id && companyProfile.settings, "Perfil da empresa nao retornou preferencias.");
+  const updatedCompany = await request("/api/company-profile", {
+    method: "PUT",
+    headers,
+    body: {
+      ...companyProfile,
+      notes: `${companyProfile.notes || ""} Smoke UX`.trim(),
+      settings: {
+        ...companyProfile.settings,
+        onboardingCompleted: true,
+        defaultPageSize: 20,
+        compactTables: true,
+        dashboardFocus: "financeiro"
+      }
+    }
+  });
+  assert(updatedCompany.company?.settings?.defaultPageSize === 20, "Preferencias da empresa nao foram atualizadas.");
+  await request("/api/company-profile", {
+    method: "PUT",
+    headers,
+    body: companyProfile
+  });
+
   const created = await request("/api/clients", {
     method: "POST",
     headers,

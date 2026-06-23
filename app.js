@@ -7,6 +7,7 @@ const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
 const API_COMPLIANCE_EXPORT_URL = "/api/compliance/export";
 const API_COMPLIANCE_ANONYMIZE_CLIENT_URL = "/api/compliance/anonymize-client";
+const API_COMPANY_PROFILE_URL = "/api/company-profile";
 const API_COLLECTIONS = new Set(["tenants", "users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
@@ -37,6 +38,13 @@ const roleLabels = {
   visualizador: "Visualizador"
 };
 
+const defaultTenantSettings = {
+  onboardingCompleted: false,
+  defaultPageSize: 10,
+  compactTables: false,
+  dashboardFocus: "executivo"
+};
+
 const actionPermissions = {
   tenants: { create: ["admin"], edit: ["admin"], delete: ["admin"] },
   clients: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
@@ -55,7 +63,7 @@ const initialData = {
   auditLogs: [],
   notificationReads: [],
   tenants: [
-    { id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP." }
+    { id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP.", settings: { ...defaultTenantSettings } }
   ],
   users: [
     { id: uid(), tenantId: "tenant_santus", name: "Administrador SANTUS", email: "admin@santus.com", password: "santus123", role: "admin", status: "ativo" },
@@ -102,6 +110,7 @@ let state = structuredClone(initialData);
 let activeModule = "dashboard";
 const listFilters = {};
 const statusFilters = {};
+const listPaging = {};
 const activityFilters = { query: "", action: "", collection: "" };
 const activityPaging = {
   page: 1,
@@ -195,8 +204,11 @@ function normalizeState(savedState) {
     }
   });
   if (!normalized.tenants.some((tenant) => tenant.id === "tenant_santus")) {
-    normalized.tenants.unshift({ id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP." });
+    normalized.tenants.unshift({ id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP.", settings: { ...defaultTenantSettings } });
   }
+  normalized.tenants.forEach((tenant) => {
+    tenant.settings = normalizeTenantSettings(tenant.settings);
+  });
   ["users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"].forEach((collection) => {
     normalized[collection].forEach((record) => {
       if (!record.tenantId) {
@@ -206,6 +218,16 @@ function normalizeState(savedState) {
   });
   normalized.notificationReads = normalizeNotificationReads(normalized.notificationReads);
   return normalized;
+}
+
+function normalizeTenantSettings(settings = {}) {
+  const pageSize = Number(settings.defaultPageSize || defaultTenantSettings.defaultPageSize);
+  return {
+    onboardingCompleted: Boolean(settings.onboardingCompleted),
+    defaultPageSize: [10, 20, 50].includes(pageSize) ? pageSize : defaultTenantSettings.defaultPageSize,
+    compactTables: Boolean(settings.compactTables),
+    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : defaultTenantSettings.dashboardFocus
+  };
 }
 
 function saveState(options = {}) {
@@ -529,6 +551,66 @@ function addAuditLogFromApi(auditLog) {
     .slice(0, 200);
 }
 
+function getCurrentTenant() {
+  const tenantId = state.session?.tenantId || getSessionUser()?.tenantId || "tenant_santus";
+  return state.tenants.find((tenant) => tenant.id === tenantId) || state.tenants[0];
+}
+
+function getTenantSettings() {
+  return normalizeTenantSettings(getCurrentTenant()?.settings);
+}
+
+async function saveCompanyProfile(payload) {
+  const tenant = getCurrentTenant();
+  const nextCompany = {
+    ...tenant,
+    ...payload,
+    settings: normalizeTenantSettings({ ...tenant?.settings, ...payload.settings })
+  };
+
+  if (!location.protocol.startsWith("http")) {
+    updateTenantInState(nextCompany);
+    saveState({ syncApi: false });
+    return { ok: true, company: nextCompany };
+  }
+
+  const result = await apiRequest(API_COMPANY_PROFILE_URL, {
+    method: "PUT",
+    body: JSON.stringify(nextCompany)
+  });
+  if (result?.company) {
+    updateTenantInState(result.company);
+    addAuditLogFromApi(result.auditLog);
+    saveState({ syncApi: false });
+  }
+  return result;
+}
+
+function updateTenantInState(tenant) {
+  const index = state.tenants.findIndex((item) => item.id === tenant.id);
+  const normalizedTenant = { ...tenant, settings: normalizeTenantSettings(tenant.settings) };
+  if (index === -1) {
+    state.tenants.push(normalizedTenant);
+    return;
+  }
+  state.tenants[index] = { ...state.tenants[index], ...normalizedTenant };
+  if (state.session?.tenantId === normalizedTenant.id) {
+    state.session.tenantName = normalizedTenant.name;
+  }
+}
+
+async function updateTenantSettings(partialSettings) {
+  const tenant = getCurrentTenant();
+  if (!tenant) return null;
+  return saveCompanyProfile({
+    ...tenant,
+    settings: {
+      ...getTenantSettings(),
+      ...partialSettings
+    }
+  });
+}
+
 function hydrateReferences() {
   const firstClient = state.clients[0]?.id || null;
   const secondClient = state.clients[1]?.id || firstClient;
@@ -632,8 +714,13 @@ function showLogin() {
 function showApp() {
   loginScreen.classList.add("hidden");
   appShell.classList.remove("hidden");
+  applyTenantPreferences();
   renderNavigation();
   navigate(activeModule);
+}
+
+function applyTenantPreferences() {
+  document.body.classList.toggle("compact-tables", getTenantSettings().compactTables);
 }
 
 function getSessionUser() {
@@ -806,6 +893,7 @@ function renderDashboard() {
   });
 
   content.innerHTML = `
+    ${renderOnboardingPanel()}
     <section class="grid kpi-grid">
       ${kpi("Resultado realizado", money(result), result >= 0 ? "success" : "danger")}
       ${kpi("Saldo previsto", money(projectedBalance), projectedBalance >= 0 ? "success" : "warning")}
@@ -829,10 +917,7 @@ function renderDashboard() {
       <div class="panel">
         <div class="panel-header"><h3>Atalhos</h3><span class="status neutral">acao rapida</span></div>
         <div class="panel-body quick-actions">
-          <button type="button" data-goto="clients">Clientes</button>
-          <button type="button" data-goto="proposals">Propostas</button>
-          <button type="button" data-goto="projects">Projetos</button>
-          <button type="button" data-goto="tasks">Tarefas</button>
+          ${getDashboardQuickActions().map((item) => `<button type="button" data-goto="${item.id}">${item.label}</button>`).join("")}
         </div>
       </div>
     </section>
@@ -858,10 +943,132 @@ function renderDashboard() {
     </section>
   `;
   bindGoToButtons();
+  bindOnboardingActions();
 }
 
 function kpi(label, value, tone = "neutral") {
   return `<article class="card kpi-card kpi-${tone}"><span>${label}</span><strong>${value}</strong></article>`;
+}
+
+function getDashboardQuickActions() {
+  const groups = {
+    executivo: [
+      { id: "clients", label: "Clientes" },
+      { id: "proposals", label: "Propostas" },
+      { id: "projects", label: "Projetos" },
+      { id: "reports", label: "Relatorios" }
+    ],
+    financeiro: [
+      { id: "finance", label: "Financeiro" },
+      { id: "reports", label: "Relatorios" },
+      { id: "clients", label: "Clientes" },
+      { id: "notifications", label: "Notificacoes" }
+    ],
+    operacional: [
+      { id: "tasks", label: "Tarefas" },
+      { id: "projects", label: "Projetos" },
+      { id: "automations", label: "Automacoes" },
+      { id: "notifications", label: "Notificacoes" }
+    ]
+  };
+  return groups[getTenantSettings().dashboardFocus] || groups.executivo;
+}
+
+function renderOnboardingPanel() {
+  const settings = getTenantSettings();
+  if (settings.onboardingCompleted) return "";
+
+  const tenant = getCurrentTenant();
+  const steps = getOnboardingSteps();
+  const completed = steps.filter((step) => step.done).length;
+  const completion = Math.round((completed / steps.length) * 100);
+  return `
+    <section class="panel onboarding-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Primeira configuracao</p>
+          <h3>${escapeHtml(tenant?.name || "Empresa")} esta ${completion}% configurada</h3>
+          <span class="panel-subtitle">Complete os cadastros basicos para deixar a operacao pronta para uso diario.</span>
+        </div>
+        <span class="status ${completion >= 80 ? "success" : "warning"}">${completed}/${steps.length}</span>
+      </div>
+      <div class="panel-body onboarding-grid">
+        <div class="onboarding-steps">
+          ${steps.map((step) => `
+            <article class="onboarding-step ${step.done ? "is-done" : ""}">
+              <span class="onboarding-check">${step.done ? "OK" : ""}</span>
+              <div>
+                <strong>${step.title}</strong>
+                <p>${step.detail}</p>
+              </div>
+              ${step.target ? `<button type="button" class="secondary" data-goto="${step.target}">${step.action}</button>` : ""}
+            </article>
+          `).join("")}
+        </div>
+        <div class="onboarding-side">
+          <strong>Proximo melhor passo</strong>
+          <p>${escapeHtml(steps.find((step) => !step.done)?.detail || "A configuracao inicial ja esta em bom ponto para operacao.")}</p>
+          <button type="button" data-goto="${steps.find((step) => !step.done)?.target || "settings"}">${steps.find((step) => !step.done)?.action || "Revisar configuracoes"}</button>
+          <button type="button" class="secondary" data-complete-onboarding>Marcar como concluido</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function getOnboardingSteps() {
+  const tenant = getCurrentTenant();
+  return [
+    {
+      title: "Perfil da empresa",
+      detail: "Nome, documento, e-mail e telefone conferidos.",
+      done: Boolean(tenant?.name && tenant?.document && tenant?.email),
+      target: "settings",
+      action: "Revisar perfil"
+    },
+    {
+      title: "Clientes",
+      detail: "Pelo menos um cliente ativo ou prospect cadastrado.",
+      done: state.clients.length > 0,
+      target: "clients",
+      action: "Abrir clientes"
+    },
+    {
+      title: "Financeiro",
+      detail: "Contas a pagar ou receber registradas para acompanhamento.",
+      done: state.payables.length > 0 || state.receivables.length > 0,
+      target: "finance",
+      action: "Abrir financeiro"
+    },
+    {
+      title: "Projetos e tarefas",
+      detail: "Projetos e tarefas iniciais criados para organizar a operacao.",
+      done: state.projects.length > 0 && state.tasks.length > 0,
+      target: state.projects.length ? "tasks" : "projects",
+      action: state.projects.length ? "Abrir tarefas" : "Abrir projetos"
+    },
+    {
+      title: "Usuarios",
+      detail: "Equipe administrativa revisada com perfis corretos.",
+      done: state.users.length > 1,
+      target: "users",
+      action: "Abrir usuarios"
+    }
+  ];
+}
+
+function bindOnboardingActions() {
+  content.querySelector("[data-complete-onboarding]")?.addEventListener("click", async (event) => {
+    await withBusyButton(event.currentTarget, "Concluindo...", async () => {
+      const result = await updateTenantSettings({ onboardingCompleted: true });
+      if (!result) {
+        toast(apiErrorMessage("Nao foi possivel concluir o onboarding."));
+        return;
+      }
+      toast("Onboarding concluido.");
+      renderDashboard();
+    });
+  });
 }
 
 function bar(label, value, max) {
@@ -1336,6 +1543,8 @@ function renderCrud(schemaId) {
   const query = listFilters[schemaId] || "";
   const status = statusFilters[schemaId] || "";
   const filteredItems = filterItems(schemaId, items, query, status);
+  const paging = getListPaging(schemaId, filteredItems.length);
+  const visibleItems = filteredItems.slice((paging.page - 1) * paging.pageSize, paging.page * paging.pageSize);
   const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
   const statusOptions = getStatusOptions(schemaId);
   content.innerHTML = `
@@ -1367,7 +1576,8 @@ function renderCrud(schemaId) {
         <h3>Lista</h3>
         <div class="panel-actions" data-list-actions="${schemaId}">${renderListActions(schemaId, totalLabel, query, status)}</div>
       </div>
-      <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, filteredItems, true, query, status)}</div>
+      <div class="panel-body table-wrap" data-table-container="${schemaId}">${renderTable(schemaId, visibleItems, true, query, status)}</div>
+      <div class="panel-footer" data-list-pagination="${schemaId}">${renderListPagination(schemaId, paging, filteredItems.length)}</div>
     </section>
   `;
   bindCrud(schemaId);
@@ -1377,6 +1587,37 @@ function renderListActions(schemaId, totalLabel, query, status) {
   return `
     ${(query || status) ? `<button type="button" class="secondary" data-clear-filters="${schemaId}">Limpar filtros</button>` : ""}
     <span class="status neutral">${totalLabel}</span>
+  `;
+}
+
+function getListPaging(schemaId, totalItems) {
+  const defaultPageSize = getTenantSettings().defaultPageSize;
+  const current = listPaging[schemaId] || {};
+  const pageSize = [10, 20, 50].includes(Number(current.pageSize)) ? Number(current.pageSize) : defaultPageSize;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const page = Math.min(Math.max(Number(current.page || 1), 1), totalPages);
+  listPaging[schemaId] = { page, pageSize, totalPages };
+  return listPaging[schemaId];
+}
+
+function renderListPagination(schemaId, paging, totalItems) {
+  if (!totalItems) {
+    return `<div class="pagination"><span>Nenhum registro para paginar.</span></div>`;
+  }
+  const start = (paging.page - 1) * paging.pageSize + 1;
+  const end = Math.min(totalItems, paging.page * paging.pageSize);
+  return `
+    <div class="pagination">
+      <span>${start}-${end} de ${totalItems}</span>
+      <label>
+        Por pagina
+        <select data-list-page-size="${schemaId}">
+          ${[10, 20, 50].map((size) => `<option value="${size}" ${size === paging.pageSize ? "selected" : ""}>${size}</option>`).join("")}
+        </select>
+      </label>
+      <button type="button" class="secondary" data-list-prev="${schemaId}" ${paging.page <= 1 ? "disabled" : ""}>Anterior</button>
+      <button type="button" class="secondary" data-list-next="${schemaId}" ${paging.page >= paging.totalPages ? "disabled" : ""}>Proxima</button>
+    </div>
   `;
 }
 
@@ -1592,12 +1833,14 @@ function bindCrud(schemaId) {
   content.querySelectorAll("[data-search]").forEach((input) => {
     input.addEventListener("input", () => {
       listFilters[input.dataset.search] = input.value;
+      listPaging[input.dataset.search] = { ...(listPaging[input.dataset.search] || {}), page: 1 };
       refreshCrudList(input.dataset.search);
     });
   });
   content.querySelectorAll("[data-status-filter]").forEach((select) => {
     select.addEventListener("change", () => {
       statusFilters[select.dataset.statusFilter] = select.value;
+      listPaging[select.dataset.statusFilter] = { ...(listPaging[select.dataset.statusFilter] || {}), page: 1 };
       refreshCrudList(select.dataset.statusFilter);
     });
   });
@@ -1623,6 +1866,22 @@ function bindCrud(schemaId) {
   content.querySelectorAll("[data-export]").forEach((button) => {
     button.addEventListener("click", () => exportCsv(button.dataset.export, schemaId));
   });
+  bindListPagination(schemaId);
+}
+
+function bindListPagination(schemaId) {
+  content.querySelector(`[data-list-prev="${schemaId}"]`)?.addEventListener("click", () => {
+    listPaging[schemaId] = { ...(listPaging[schemaId] || {}), page: Math.max(1, Number(listPaging[schemaId]?.page || 1) - 1) };
+    refreshCrudList(schemaId);
+  });
+  content.querySelector(`[data-list-next="${schemaId}"]`)?.addEventListener("click", () => {
+    listPaging[schemaId] = { ...(listPaging[schemaId] || {}), page: Number(listPaging[schemaId]?.page || 1) + 1 };
+    refreshCrudList(schemaId);
+  });
+  content.querySelector(`[data-list-page-size="${schemaId}"]`)?.addEventListener("change", (event) => {
+    listPaging[schemaId] = { page: 1, pageSize: Number(event.target.value) };
+    refreshCrudList(schemaId);
+  });
 }
 
 function refreshCrudList(schemaId) {
@@ -1631,10 +1890,13 @@ function refreshCrudList(schemaId) {
   const query = listFilters[schemaId] || "";
   const status = statusFilters[schemaId] || "";
   const filteredItems = filterItems(schemaId, items, query, status);
+  const paging = getListPaging(schemaId, filteredItems.length);
+  const visibleItems = filteredItems.slice((paging.page - 1) * paging.pageSize, paging.page * paging.pageSize);
   const totalLabel = filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`;
   const countElement = content.querySelector(`[data-list-count="${schemaId}"]`);
   const actionsElement = content.querySelector(`[data-list-actions="${schemaId}"]`);
   const tableContainer = content.querySelector(`[data-table-container="${schemaId}"]`);
+  const paginationContainer = content.querySelector(`[data-list-pagination="${schemaId}"]`);
 
   if (countElement) {
     countElement.textContent = `${totalLabel} ${schema.label}${filteredItems.length === 1 ? "" : "s"}`;
@@ -1643,7 +1905,10 @@ function refreshCrudList(schemaId) {
     actionsElement.innerHTML = renderListActions(schemaId, totalLabel, query, status);
   }
   if (tableContainer) {
-    tableContainer.innerHTML = renderTable(schemaId, filteredItems, true, query, status);
+    tableContainer.innerHTML = renderTable(schemaId, visibleItems, true, query, status);
+  }
+  if (paginationContainer) {
+    paginationContainer.innerHTML = renderListPagination(schemaId, paging, filteredItems.length);
   }
 
   content.querySelectorAll("[data-edit]").forEach((button) => {
@@ -1659,12 +1924,14 @@ function refreshCrudList(schemaId) {
       renderCrud(button.dataset.clearFilters);
     });
   });
+  bindListPagination(schemaId);
 }
 
 async function saveForm(event, schemaId) {
   event.preventDefault();
   const schema = schemas[schemaId];
   const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
   const isEditing = Boolean(form.dataset.id);
   if ((isEditing && !canEdit(schemaId)) || (!isEditing && !canCreate(schemaId))) {
     showFormError(form, "Seu perfil nao possui permissao para salvar este registro.");
@@ -1687,42 +1954,44 @@ async function saveForm(event, schemaId) {
     if (type === "number") item[name] = Number(item[name] || 0);
   });
 
-  const collection = state[schema.collection];
-  const previousCollection = collection.map((record) => ({ ...record }));
-  const previousReceivables = state.receivables.map((record) => ({ ...record }));
-  let savedItem;
-  if (isEditing) {
-    const index = collection.findIndex((record) => record.id === form.dataset.id);
-    collection[index] = { ...collection[index], ...item };
-    savedItem = collection[index];
-  } else {
-    savedItem = { id: uid(), ...item };
-    collection.push(savedItem);
-  }
+  await withBusyButton(submitButton, "Salvando...", async () => {
+    const collection = state[schema.collection];
+    const previousCollection = collection.map((record) => ({ ...record }));
+    const previousReceivables = state.receivables.map((record) => ({ ...record }));
+    let savedItem;
+    if (isEditing) {
+      const index = collection.findIndex((record) => record.id === form.dataset.id);
+      collection[index] = { ...collection[index], ...item };
+      savedItem = collection[index];
+    } else {
+      savedItem = { id: uid(), ...item };
+      collection.push(savedItem);
+    }
 
-  const generatedRecords = applyBusinessRules(schema.collection, savedItem);
-  await saveRecordToApi(schema.collection, savedItem, isEditing);
-  if (lastApiError) {
-    state[schema.collection] = previousCollection;
-    state.receivables = previousReceivables;
-    if (lastApiError.status === 401) return;
-    showFormError(form, apiErrorMessage(`Nao foi possivel salvar ${schema.label}.`));
-    return;
-  }
-
-  for (const generatedRecord of generatedRecords) {
-    await saveRecordToApi("receivables", generatedRecord, false);
+    const generatedRecords = applyBusinessRules(schema.collection, savedItem);
+    await saveRecordToApi(schema.collection, savedItem, isEditing);
     if (lastApiError) {
       state[schema.collection] = previousCollection;
       state.receivables = previousReceivables;
       if (lastApiError.status === 401) return;
-      showFormError(form, apiErrorMessage("Registro salvo, mas nao foi possivel gerar o recebimento automatico."));
+      showFormError(form, apiErrorMessage(`Nao foi possivel salvar ${schema.label}.`));
       return;
     }
-  }
-  saveState();
-  toast(`${capitalize(schema.label)} ${isEditing ? "atualizado" : "cadastrado"} com sucesso.`);
-  renderCrud(schemaId);
+
+    for (const generatedRecord of generatedRecords) {
+      await saveRecordToApi("receivables", generatedRecord, false);
+      if (lastApiError) {
+        state[schema.collection] = previousCollection;
+        state.receivables = previousReceivables;
+        if (lastApiError.status === 401) return;
+        showFormError(form, apiErrorMessage("Registro salvo, mas nao foi possivel gerar o recebimento automatico."));
+        return;
+      }
+    }
+    saveState();
+    toast(`${capitalize(schema.label)} ${isEditing ? "atualizado" : "cadastrado"} com sucesso.`);
+    renderCrud(schemaId);
+  });
 }
 
 function findInvalidField(schemaId, item, isEditing = false) {
@@ -2921,6 +3190,8 @@ function formatDateTime(value) {
 }
 
 function renderSettings() {
+  const tenant = getCurrentTenant();
+  const settings = getTenantSettings();
   const clientOptions = state.clients
     .slice()
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"))
@@ -2928,21 +3199,96 @@ function renderSettings() {
     .join("");
   content.innerHTML = `
     <section class="grid two-columns">
-      <article class="card">
-        <p class="eyebrow">Seguranca</p>
-        <h3>Politicas administrativas</h3>
-        <p>O sistema controla acesso por perfil, registra historico de atividades, usa senha com hash no backend, politica de senha forte e autentica por cookie HttpOnly. As proximas camadas recomendadas sao 2FA e politicas avancadas de acesso.</p>
-      </article>
-      <article class="card">
-        <p class="eyebrow">Roadmap</p>
-        <h3>Expansao modular</h3>
-        <p>Contratos basicos ja foram iniciados. Portal do cliente, automacoes, IA, integracoes fiscais, API e PWA estao previstos para as proximas fases.</p>
-      </article>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Perfil da empresa</h3>
+            <span class="panel-subtitle">Dados usados na sessao, relatórios e operacao diaria</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form class="form-grid" data-company-profile novalidate>
+            <div class="form-alert full hidden" data-form-alert></div>
+            <label>
+              <span class="field-label">Nome da empresa<small>Obrigatorio</small></span>
+              <input name="name" value="${escapeHtml(tenant?.name || "")}" required />
+            </label>
+            <label>
+              <span class="field-label">CNPJ/Documento<small>Obrigatorio</small></span>
+              <input name="document" value="${escapeHtml(tenant?.document || "")}" required />
+            </label>
+            <label>
+              E-mail
+              <input name="email" type="email" value="${escapeHtml(tenant?.email || "")}" />
+            </label>
+            <label>
+              Telefone
+              <input name="phone" value="${escapeHtml(tenant?.phone || "")}" />
+            </label>
+            <label class="full">
+              Observacoes
+              <textarea name="notes">${escapeHtml(tenant?.notes || "")}</textarea>
+            </label>
+            <div class="full toolbar-actions">
+              <button type="submit">Salvar perfil</button>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Preferencias</h3>
+            <span class="panel-subtitle">Ajustes visuais e de navegacao para esta empresa</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form class="form-grid" data-company-preferences>
+            <label>
+              Registros por pagina
+              <select name="defaultPageSize">
+                ${[10, 20, 50].map((size) => `<option value="${size}" ${settings.defaultPageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+              </select>
+            </label>
+            <label>
+              Foco do dashboard
+              <select name="dashboardFocus">
+                <option value="executivo" ${settings.dashboardFocus === "executivo" ? "selected" : ""}>Executivo</option>
+                <option value="financeiro" ${settings.dashboardFocus === "financeiro" ? "selected" : ""}>Financeiro</option>
+                <option value="operacional" ${settings.dashboardFocus === "operacional" ? "selected" : ""}>Operacional</option>
+              </select>
+            </label>
+            <label class="preference-toggle full">
+              <input type="checkbox" name="compactTables" ${settings.compactTables ? "checked" : ""} />
+              <span>Tabelas compactas</span>
+            </label>
+            <label class="preference-toggle full">
+              <input type="checkbox" name="onboardingCompleted" ${settings.onboardingCompleted ? "checked" : ""} />
+              <span>Onboarding concluido</span>
+            </label>
+            <div class="full toolbar-actions">
+              <button type="submit">Salvar preferencias</button>
+            </div>
+          </form>
+        </div>
+      </section>
     </section>
     <section class="panel">
-      <div class="panel-header"><h3>Manutencao local</h3></div>
-      <div class="panel-body toolbar-actions">
-        <button type="button" class="secondary" id="seedButton">Restaurar dados demonstrativos</button>
+      <div class="panel-header">
+        <div>
+          <h3>Guia rapido</h3>
+          <span class="panel-subtitle">Ordem recomendada para preparar uma empresa real</span>
+        </div>
+      </div>
+      <div class="panel-body guide-grid">
+        ${getOnboardingSteps().map((step) => `
+          <article class="guide-item ${step.done ? "is-done" : ""}">
+            <span class="status ${step.done ? "success" : "warning"}">${step.done ? "OK" : "Pendente"}</span>
+            <strong>${step.title}</strong>
+            <p>${step.detail}</p>
+            <button type="button" class="secondary" data-goto="${step.target}">${step.action}</button>
+          </article>
+        `).join("")}
       </div>
     </section>
     <section class="panel">
@@ -2985,7 +3331,15 @@ function renderSettings() {
         ${renderHealthStatus()}
       </div>
     </section>
+    <section class="panel">
+      <div class="panel-header"><h3>Manutencao local</h3></div>
+      <div class="panel-body toolbar-actions">
+        <button type="button" class="secondary" id="seedButton">Restaurar dados demonstrativos</button>
+      </div>
+    </section>
   `;
+  content.querySelector("[data-company-profile]").addEventListener("submit", saveCompanyProfileForm);
+  content.querySelector("[data-company-preferences]").addEventListener("submit", saveCompanyPreferencesForm);
   document.querySelector("#seedButton").addEventListener("click", () => {
     state = structuredClone(initialData);
     hydrateReferences();
@@ -2997,7 +3351,57 @@ function renderSettings() {
   document.querySelector("#healthRefreshButton").addEventListener("click", loadHealthStatus);
   document.querySelector("#complianceExportButton").addEventListener("click", exportComplianceData);
   document.querySelector("#complianceAnonymizeButton").addEventListener("click", anonymizeComplianceClient);
+  bindGoToButtons();
   loadHealthStatus();
+}
+
+async function saveCompanyProfileForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  if (!String(payload.name || "").trim() || !String(payload.document || "").trim()) {
+    showFormError(form, "Nome da empresa e documento sao obrigatorios.");
+    return;
+  }
+
+  await withBusyButton(form.querySelector('button[type="submit"]'), "Salvando...", async () => {
+    const result = await saveCompanyProfile({
+      ...payload,
+      status: getCurrentTenant()?.status || "ativo",
+      settings: getTenantSettings()
+    });
+    if (!result) {
+      showFormError(form, apiErrorMessage("Nao foi possivel salvar o perfil da empresa."));
+      return;
+    }
+    applyTenantPreferences();
+    renderNavigation();
+    toast("Perfil da empresa atualizado.");
+  });
+}
+
+async function saveCompanyPreferencesForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  await withBusyButton(form.querySelector('button[type="submit"]'), "Salvando...", async () => {
+    const result = await updateTenantSettings({
+      defaultPageSize: Number(formData.get("defaultPageSize") || 10),
+      dashboardFocus: String(formData.get("dashboardFocus") || "executivo"),
+      compactTables: formData.has("compactTables"),
+      onboardingCompleted: formData.has("onboardingCompleted")
+    });
+    if (!result) {
+      toast(apiErrorMessage("Nao foi possivel salvar as preferencias."));
+      return;
+    }
+    Object.keys(listPaging).forEach((key) => {
+      listPaging[key] = { page: 1, pageSize: getTenantSettings().defaultPageSize };
+    });
+    applyTenantPreferences();
+    toast("Preferencias salvas.");
+    renderSettings();
+  });
 }
 
 async function exportComplianceData() {
@@ -3123,6 +3527,22 @@ function downloadJson(filename, payload) {
 
 function csvCell(value) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+async function withBusyButton(button, busyText, task) {
+  if (!button) {
+    await task();
+    return;
+  }
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = busyText;
+  try {
+    await task();
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function toast(message) {

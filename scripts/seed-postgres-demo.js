@@ -203,7 +203,15 @@ function pushRows(statements, table, rows, mapper) {
 }
 
 function mapTenant(tenant) {
-  return pick(tenant, ["id", "name", "document", "email", "phone", "status", "notes"]);
+  return {
+    ...pick(tenant, ["id", "name", "document", "email", "phone", "status", "notes"]),
+    settings: jsonValue(tenant.settings || {
+      onboardingCompleted: false,
+      defaultPageSize: 10,
+      compactTables: false,
+      dashboardFocus: "executivo"
+    })
+  };
 }
 
 function mapUser(user) {
@@ -359,8 +367,13 @@ function nullable(value) {
   return value === undefined || value === null || value === "" ? null : value;
 }
 
+function jsonValue(value) {
+  return { __json: JSON.stringify(value || {}) };
+}
+
 function sqlValue(value) {
   if (value === null || value === undefined) return "NULL";
+  if (value && typeof value === "object" && value.__json !== undefined) return `${quote(value.__json)}::jsonb`;
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   return quote(value);

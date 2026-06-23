@@ -4,7 +4,7 @@
 
 O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
-O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema e base inicial de seguranca/compliance.
+O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance e melhorias de UX para cliente real.
 
 A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
 
@@ -106,6 +106,8 @@ backups/*.dump
 - Configuracoes administrativas.
 - Saude do sistema.
 - Compliance e LGPD inicial.
+- Onboarding inicial.
+- Perfil e preferencias da empresa.
 
 ## 6. Perfis de usuario
 
@@ -134,6 +136,8 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Projetos em andamento.
 - Tarefas abertas.
 - Alertas de vencimentos, atrasos e riscos operacionais.
+- Checklist de primeira configuracao quando o onboarding ainda nao foi concluido.
+- Atalhos ajustados pelo foco configurado para a empresa.
 
 ### Clientes
 
@@ -226,6 +230,9 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 
 - Politicas administrativas.
 - Roadmap modular.
+- Perfil da empresa.
+- Preferencias de experiencia por empresa.
+- Guia rapido de configuracao inicial.
 - Exportacao JSON de dados da empresa para atendimento LGPD.
 - Anonimizacao controlada de cliente mediante confirmacao explicita.
 - Restauracao de dados demonstrativos.
@@ -567,6 +574,15 @@ Restritas a `admin` e `gestor`.
 
 A exportacao retorna JSON com os dados visiveis para a sessao atual. A anonimizacao exige `clientId` e confirmacao `ANONYMIZE`, preservando vinculos historicos e removendo dados pessoais diretos do cliente.
 
+### Perfil e preferencias da empresa
+
+- `GET /api/company-profile`
+- `PUT /api/company-profile`
+
+Restritas a `admin` e `gestor`.
+
+Essas rotas permitem consultar e atualizar dados da empresa da sessao, incluindo nome, documento, contato, observacoes e preferencias de experiencia. As preferencias atuais cobrem onboarding concluido, registros por pagina, tabelas compactas e foco do dashboard.
+
 ### Notificacoes lidas
 
 - `GET /api/notification-reads`
@@ -592,6 +608,7 @@ Restrita a `admin` e `gestor`.
 - Novas senhas devem seguir politica minima forte.
 - Login, logout, falha de login e reset de senha sao registrados na auditoria.
 - Exportacao LGPD e anonimizacao de cliente exigem perfil `admin` ou `gestor`.
+- Perfil e preferencias da empresa exigem perfil `admin` ou `gestor`.
 - Respostas publicas nao retornam senha nem hash.
 - Valores financeiros devem ser maiores que zero.
 - Datas devem usar formato `AAAA-MM-DD`.
@@ -668,6 +685,7 @@ Fase 2 concluida no escopo planejado:
 - Migrations PostgreSQL versionadas com tabela `schema_migrations`, comando manual e aplicacao automatica pelo servidor.
 - Deploy e ambientes documentados com modelos de `.env`, script de servico, checklist de release e rollback.
 - Seguranca/compliance inicial com senha forte, reset temporario, auditoria de autenticacao, rate limit e rotas LGPD.
+- UX para cliente real com onboarding, perfil da empresa, preferencias, guia rapido, paginacao de listas e feedback de salvamento.
 
 ## 22. Status da Fase 3
 
@@ -682,7 +700,7 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Melhorar UX/onboarding para cliente real.
+1. Completar funcionalidades essenciais de produto.
 2. Expandir automacoes com regras configuraveis.
 3. Iniciar assistente de IA para analise executiva.
 

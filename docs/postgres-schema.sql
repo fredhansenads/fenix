@@ -16,6 +16,7 @@ CREATE TABLE tenants (
   phone TEXT,
   status TEXT NOT NULL CHECK (status IN ('ativo', 'suspenso', 'inativo')),
   notes TEXT,
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

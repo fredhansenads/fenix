@@ -198,7 +198,10 @@ function ensureTenantModel(data) {
 }
 
 function mapTenant(tenant) {
-  return pick(tenant, ["id", "name", "document", "email", "phone", "status", "notes"]);
+  return {
+    ...pick(tenant, ["id", "name", "document", "email", "phone", "status", "notes"]),
+    settings: jsonValue(tenant.settings || {})
+  };
 }
 
 function mapUser(user) {

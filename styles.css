@@ -707,6 +707,102 @@ label {
   font-weight: 800;
 }
 
+.preference-toggle {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  color: var(--text);
+}
+
+.preference-toggle input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.onboarding-panel .eyebrow {
+  margin: 0 0 4px;
+}
+
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.7fr);
+  gap: 16px;
+}
+
+.onboarding-steps,
+.guide-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-step,
+.guide-item {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+}
+
+.onboarding-step {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.onboarding-step.is-done,
+.guide-item.is-done {
+  background: #f0f8f4;
+}
+
+.onboarding-check {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--success);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.onboarding-step p,
+.guide-item p,
+.onboarding-side p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.onboarding-side {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.guide-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.guide-item {
+  align-content: start;
+}
+
+body.compact-tables .data-table th,
+body.compact-tables .data-table td {
+  padding: 8px 8px;
+}
+
 .empty-state {
   display: grid;
   justify-items: center;
@@ -966,13 +1062,23 @@ label {
   .four-columns,
   .three-columns,
   .health-grid,
-  .form-grid {
+  .form-grid,
+  .onboarding-grid,
+  .guide-grid {
     grid-template-columns: 1fr;
   }
 
   .notification-item {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .onboarding-step {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .onboarding-step button {
+    grid-column: 1 / -1;
   }
 
 }
