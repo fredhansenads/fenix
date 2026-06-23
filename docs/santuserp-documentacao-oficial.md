@@ -58,6 +58,7 @@ docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
 docs/santuserp-checklist-operacional.md Checklist operacional local
 docs/santuserp-ambiente-local.md       Guia de ambiente local
+docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
 scripts/start-santuserp.ps1            Inicializador local Windows
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL

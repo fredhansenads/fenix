@@ -9,8 +9,9 @@ A documentacao consolidada do sistema esta em:
 - `docs/santuserp-documentacao-oficial.md`
 - `docs/santuserp-checklist-operacional.md`
 - `docs/santuserp-ambiente-local.md`
+- `docs/santuserp-roadmap-producao.md`
 
-Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases e proximas etapas recomendadas.
+Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases, roadmap de producao e proximas etapas recomendadas.
 
 ## Como abrir
 
