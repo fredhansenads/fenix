@@ -16,6 +16,10 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const sessions = new Map();
 const sessionTtlMs = 1000 * 60 * 60 * 8;
+const sessionCookieName = "santuserp_session";
+const loginAttempts = new Map();
+const loginWindowMs = 1000 * 60 * 15;
+const maxLoginAttempts = 5;
 
 const types = {
   ".html": "text/html;charset=utf-8",
@@ -128,10 +132,11 @@ const validationRules = {
   }
 };
 
-function sendJson(response, status, payload) {
+function sendJson(response, status, payload, extraHeaders = {}) {
   response.writeHead(status, {
     "Content-Type": "application/json;charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    ...extraHeaders
   });
   response.end(JSON.stringify(payload));
 }
@@ -200,14 +205,25 @@ async function handleLoginApi(request, response) {
 
   const email = String(payload.email || "").trim().toLowerCase();
   const password = String(payload.password || "");
+  const attemptKey = getLoginAttemptKey(request, email);
+  if (isLoginRateLimited(attemptKey)) {
+    sendJson(response, 429, {
+      error: "Too many attempts",
+      message: "Muitas tentativas de login. Aguarde alguns minutos antes de tentar novamente."
+    });
+    return;
+  }
   const database = await readDatabase();
   const users = database.exists && Array.isArray(database.data.users) ? database.data.users : [];
   const user = users.find((item) => String(item.email || "").toLowerCase() === email && verifyPassword(password, item) && item.status === "ativo");
 
   if (!user) {
+    registerFailedLogin(attemptKey);
     sendJson(response, 401, { error: "Invalid credentials" });
     return;
   }
+
+  clearLoginAttempts(attemptKey);
 
   if (!user.passwordHash && user.password) {
     user.passwordHash = hashPassword(user.password);
@@ -235,7 +251,10 @@ async function handleLoginApi(request, response) {
   sendJson(response, 200, {
     token,
     expiresAt,
+    authMode: "cookie",
     user: sanitizeUser(user)
+  }, {
+    "Set-Cookie": buildSessionCookie(token, expiresAt)
   });
 }
 
@@ -252,7 +271,9 @@ async function handleLogoutApi(request, response) {
       await databaseRepository.deleteSession(token);
     }
   }
-  sendJson(response, 200, { ok: true });
+  sendJson(response, 200, { ok: true }, {
+    "Set-Cookie": buildExpiredSessionCookie()
+  });
 }
 
 async function handleBootstrapApi(request, response) {
@@ -680,7 +701,93 @@ function getRequestToken(request) {
   if (authorization.toLowerCase().startsWith("bearer ")) {
     return authorization.slice(7).trim();
   }
-  return request.headers["x-santuserp-session-token"] || request.headers["x-fenix-session-token"] || "";
+  return getCookieValue(request, sessionCookieName)
+    || request.headers["x-santuserp-session-token"]
+    || request.headers["x-fenix-session-token"]
+    || "";
+}
+
+function getCookieValue(request, name) {
+  const cookieHeader = request.headers.cookie || "";
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .reduce((found, part) => {
+      if (found) return found;
+      const separator = part.indexOf("=");
+      if (separator === -1) return "";
+      const key = part.slice(0, separator);
+      const value = part.slice(separator + 1);
+      if (key !== name) return "";
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return "";
+      }
+    }, "");
+}
+
+function buildSessionCookie(token, expiresAt) {
+  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  return buildCookie(sessionCookieName, token, {
+    httpOnly: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge,
+    expires: expiresAt
+  });
+}
+
+function buildExpiredSessionCookie() {
+  return buildCookie(sessionCookieName, "", {
+    httpOnly: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0).toISOString()
+  });
+}
+
+function buildCookie(name, value, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
+  if (options.expires) parts.push(`Expires=${new Date(options.expires).toUTCString()}`);
+  if (options.path) parts.push(`Path=${options.path}`);
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
+  if (shouldUseSecureCookies()) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function shouldUseSecureCookies() {
+  return process.env.SANTUSERP_SECURE_COOKIES === "true" || process.env.NODE_ENV === "production";
+}
+
+function getLoginAttemptKey(request, email) {
+  return `${getRequestIp(request)}:${email || "sem-email"}`;
+}
+
+function isLoginRateLimited(key) {
+  const attempt = loginAttempts.get(key);
+  if (!attempt) return false;
+  if (Date.now() - attempt.firstAttemptAt > loginWindowMs) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return attempt.count >= maxLoginAttempts;
+}
+
+function registerFailedLogin(key) {
+  const current = loginAttempts.get(key);
+  if (!current || Date.now() - current.firstAttemptAt > loginWindowMs) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: Date.now() });
+    return;
+  }
+  current.count += 1;
+}
+
+function clearLoginAttempts(key) {
+  loginAttempts.delete(key);
 }
 
 function sanitizeUser(user) {

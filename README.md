@@ -147,9 +147,11 @@ Autenticacao local:
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 
-O login retorna um token de sessao temporario em memoria. Quando o servidor esta ativo, o frontend usa esse token no cabecalho `Authorization: Bearer <token>` para identificar o usuario nas acoes da API. No primeiro acesso, se o arquivo `data/fenix-db.json` ainda nao existir, o frontend inicializa a API com os dados locais antes de repetir o login.
+O login cria uma sessao temporaria e envia o cookie `santuserp_session` com `HttpOnly`, `SameSite=Lax` e expiracao alinhada a sessao. Quando o servidor esta ativo, o frontend autentica as acoes pela sessao em cookie, sem gravar o token puro no `localStorage`. O cabecalho `Authorization: Bearer <token>` continua aceito apenas como compatibilidade tecnica para scripts e transicao.
 
-Quando PostgreSQL esta ativo, a sessao tambem e persistida na tabela `user_sessions` usando hash do token. Isso permite validar sessoes mesmo apos reiniciar o servidor local.
+Quando PostgreSQL esta ativo, a sessao tambem e persistida na tabela `user_sessions` usando hash SHA-256 do token. Isso permite validar sessoes mesmo apos reiniciar o servidor local, sem salvar o token puro no banco.
+
+O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta.
 
 As senhas salvas pela API local sao convertidas para hash `scrypt` antes da gravacao. As respostas publicas da API nao retornam senha nem hash de senha dos usuarios.
 
@@ -225,7 +227,7 @@ As melhorias de UX/UI incluem estados vazios com acao rapida, limpeza de filtros
 
 A auditoria inicial possui filtros por busca, acao e modulo, resumo de criacoes, edicoes e exclusoes, leitura textual dos eventos registrados e exportacao CSV respeitando os filtros aplicados.
 
-As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API prioriza o token de sessao gerado no login e mantem compatibilidade com os cabecalhos enviados pelo sistema:
+As permissoes por acao controlam quem pode criar, editar e excluir registros por modulo no frontend e na API local. Perfis operacionais e comerciais podem atuar nos seus modulos, enquanto exclusoes ficam restritas a administradores e gestores. A API prioriza a sessao segura em cookie e mantem compatibilidade com os cabecalhos de ator enviados pelo sistema:
 
 - `x-santuserp-user-id`
 - `x-santuserp-user-name`
@@ -235,4 +237,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e evoluir a sessao local para autenticacao persistente propria de ambiente produtivo e reduzir gradualmente a dependencia do endpoint `/api/state`.
+A proxima etapa recomendada e reduzir gradualmente a dependencia do endpoint `/api/state`, adicionar recuperacao de senha e preparar isolamento multiempresa para clientes reais.

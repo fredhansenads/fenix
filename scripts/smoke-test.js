@@ -31,17 +31,22 @@ main().catch((error) => {
 async function main() {
   await waitForServer();
 
-  const login = await request("/api/auth/login", {
+  const loginResponse = await rawRequest("/api/auth/login", {
     method: "POST",
     body: {
       email: "admin@santus.com",
       password: "santus123"
     }
   });
-  assert(login.token, "Login nao retornou token.");
+  const login = loginResponse.payload;
+  const setCookieHeader = loginResponse.headers.get("set-cookie");
+  const sessionCookie = extractCookie(setCookieHeader, "santuserp_session");
+  assert(sessionCookie, "Login nao retornou cookie de sessao HttpOnly.");
+  assert(/httponly/i.test(setCookieHeader), "Cookie de sessao nao possui HttpOnly.");
+  assert(/samesite=lax/i.test(setCookieHeader), "Cookie de sessao nao possui SameSite=Lax.");
   assert(login.user?.email === "admin@santus.com", "Login retornou usuario inesperado.");
 
-  const headers = { Authorization: `Bearer ${login.token}` };
+  const headers = { Cookie: sessionCookie };
   const health = await request("/api/health", { headers });
   assert(health.ok === true, "Health check nao retornou ok.");
   assert(health.databaseInitialized === true, "Banco nao esta inicializado.");
@@ -96,6 +101,11 @@ async function main() {
 }
 
 async function request(path, options = {}) {
+  const response = await rawRequest(path, options);
+  return response.payload;
+}
+
+async function rawRequest(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method: options.method || "GET",
     headers: {
@@ -108,7 +118,14 @@ async function request(path, options = {}) {
   if (!response.ok) {
     throw new Error(`${options.method || "GET"} ${path} retornou ${response.status}: ${JSON.stringify(payload)}`);
   }
-  return payload;
+  return { payload, headers: response.headers };
+}
+
+function extractCookie(setCookieHeader, name) {
+  if (!setCookieHeader) return "";
+  const cookies = setCookieHeader.split(/,(?=\s*[^;=]+=[^;]+)/);
+  const cookie = cookies.find((item) => item.trim().startsWith(`${name}=`));
+  return cookie ? cookie.split(";")[0].trim() : "";
 }
 
 async function waitForServer() {

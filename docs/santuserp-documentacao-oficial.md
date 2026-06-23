@@ -423,13 +423,13 @@ docs/santuserp-ambiente-local.md
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 
-O login retorna token temporario em memoria. O frontend envia:
+O login cria uma sessao temporaria e envia o cookie `santuserp_session` com `HttpOnly`, `SameSite=Lax` e expiracao alinhada ao tempo da sessao. O frontend autentica as chamadas pela sessao em cookie e nao grava o token puro no `localStorage`.
 
-```text
-Authorization: Bearer <token>
-```
+O cabecalho `Authorization: Bearer <token>` continua aceito como compatibilidade tecnica para scripts e transicao.
 
 Quando PostgreSQL esta ativo, a sessao tambem e registrada na tabela `user_sessions` usando hash SHA-256 do token. Isso permite validar sessoes mesmo depois de reiniciar o servidor local, sem salvar o token puro no banco.
+
+O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta.
 
 ### Estado completo
 
@@ -506,6 +506,9 @@ Restrita a `admin` e `gestor`.
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
 - Tokens de sessao sao armazenados no PostgreSQL apenas como hash SHA-256.
+- Sessoes autenticadas usam cookie `HttpOnly` e `SameSite=Lax`.
+- O frontend nao persiste token puro no `localStorage`.
+- Tentativas repetidas de login invalido sao limitadas por janela de tempo.
 - Respostas publicas nao retornam senha nem hash.
 - Valores financeiros devem ser maiores que zero.
 - Datas devem usar formato `AAAA-MM-DD`.

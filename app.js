@@ -140,7 +140,7 @@ async function boot() {
 
 async function loadState() {
   const cachedSession = readCachedSession();
-  const apiState = await loadStateFromApi(cachedSession?.apiToken);
+  const apiState = await loadStateFromApi(cachedSession?.apiToken || "");
   if (apiState) {
     const normalized = normalizeState(apiState);
     const cachedUserExists = cachedSession?.userId && normalized.users.some((user) => user.id === cachedSession.userId);
@@ -149,10 +149,11 @@ async function loadState() {
       normalized.session = {
         ...normalized.session,
         ...cachedSession,
+        apiToken: "",
         apiTokenExpiresAt: cachedSession.apiTokenExpiresAt || ""
       };
     }
-    localStorage.setItem(STORE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(STORE_KEY, JSON.stringify(getPersistableState(normalized)));
     return normalized;
   }
 
@@ -191,10 +192,18 @@ function normalizeState(savedState) {
 
 function saveState(options = {}) {
   const { syncApi = true } = options;
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORE_KEY, JSON.stringify(getPersistableState(state)));
   if (syncApi) {
     saveStateToApi(state);
   }
+}
+
+function getPersistableState(nextState) {
+  const persistable = structuredClone(nextState);
+  if (persistable.session) {
+    delete persistable.session.apiToken;
+  }
+  return persistable;
 }
 
 function readCachedSession() {
@@ -210,21 +219,20 @@ async function loadStateFromApi(token = "") {
     return null;
   }
 
-  if (token) {
-    const modularState = await loadStateFromModules(token);
-    if (modularState) {
-      return modularState;
-    }
+  const modularState = await loadStateFromModules(token);
+  if (modularState) {
+    return modularState;
+  }
 
-    const bootstrapState = await loadStateFromBootstrap(token);
-    if (bootstrapState) {
-      return bootstrapState;
-    }
+  const bootstrapState = await loadStateFromBootstrap(token);
+  if (bootstrapState) {
+    return bootstrapState;
   }
 
   try {
     const response = await fetch(API_STATE_URL, {
       cache: "no-store",
+      credentials: "same-origin",
       headers: token ? { "Authorization": `Bearer ${token}` } : {}
     });
     if (!response.ok) {
@@ -238,9 +246,10 @@ async function loadStateFromApi(token = "") {
 
 async function loadStateFromModules(token) {
   try {
-    const headers = { "Authorization": `Bearer ${token}` };
+    const headers = token ? { "Authorization": `Bearer ${token}` } : {};
     const notificationResponse = await fetch(API_NOTIFICATION_READS_URL, {
       cache: "no-store",
+      credentials: "same-origin",
       headers
     });
     if (!notificationResponse.ok) {
@@ -250,6 +259,7 @@ async function loadStateFromModules(token) {
     const collectionEntries = await Promise.all([...API_COLLECTIONS].map(async (collection) => {
       const response = await fetch(collectionApiPath(collection), {
         cache: "no-store",
+        credentials: "same-origin",
         headers
       });
       if (!response.ok) {
@@ -264,6 +274,7 @@ async function loadStateFromModules(token) {
 
     const activityResponse = await fetch("/api/activity-log?page=1&pageSize=20", {
       cache: "no-store",
+      credentials: "same-origin",
       headers
     });
     const activityPayload = activityResponse.ok ? await activityResponse.json() : null;
@@ -289,7 +300,8 @@ async function loadStateFromBootstrap(token) {
   try {
     const response = await fetch(API_BOOTSTRAP_URL, {
       cache: "no-store",
-      headers: { "Authorization": `Bearer ${token}` }
+      credentials: "same-origin",
+      headers: token ? { "Authorization": `Bearer ${token}` } : {}
     });
     if (!response.ok) {
       return null;
@@ -316,9 +328,9 @@ async function saveStateToApi(nextState) {
   try {
     const response = await fetch(API_STATE_URL, {
       method: "PUT",
+      credentials: "same-origin",
       headers: {
-        "Content-Type": "application/json",
-        ...(nextState.session?.apiToken ? { "Authorization": `Bearer ${nextState.session.apiToken}` } : {})
+        "Content-Type": "application/json"
       },
       body: JSON.stringify(apiState)
     });
@@ -345,12 +357,11 @@ async function apiRequest(path, options = {}) {
 
   try {
     const user = getSessionUser();
-    const token = state.session?.apiToken;
     const response = await fetch(path, {
       ...options,
+      credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
         ...(user ? {
           "X-SantusERP-User-Id": user.id,
           "X-SantusERP-User-Name": user.name,
@@ -404,7 +415,7 @@ function expireSession() {
 
   handlingUnauthorized = true;
   state.session = null;
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORE_KEY, JSON.stringify(getPersistableState(state)));
   showLogin();
   toast("Sessao expirada ou invalida. Entre novamente para continuar.");
   window.setTimeout(() => {
@@ -424,6 +435,7 @@ async function loginToApi(email, password) {
   try {
     const response = await fetch(API_LOGIN_URL, {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password })
     });
@@ -436,15 +448,15 @@ async function loginToApi(email, password) {
   }
 }
 
-async function logoutFromApi(token) {
-  if (!location.protocol.startsWith("http") || !token) {
+async function logoutFromApi() {
+  if (!location.protocol.startsWith("http")) {
     return;
   }
 
   try {
     await fetch(API_LOGOUT_URL, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token}` }
+      credentials: "same-origin"
     });
   } catch {
     // Local logout must remain usable even if the server is offline.
@@ -554,8 +566,8 @@ async function handleLogin(event) {
     apiSession = await loginToApi(email, password);
   }
 
-  if (apiSession?.token) {
-    const apiState = await loadStateFromApi(apiSession.token);
+  if (apiSession?.user) {
+    const apiState = await loadStateFromApi(apiSession.token || "");
     if (apiState) {
       state = normalizeState(apiState);
     }
@@ -577,7 +589,7 @@ async function handleLogin(event) {
   state.session = {
     userId: user.id,
     loggedAt: new Date().toISOString(),
-    apiToken: apiSession?.token || "",
+    apiToken: "",
     apiTokenExpiresAt: apiSession?.expiresAt || ""
   };
   saveState();
@@ -585,9 +597,9 @@ async function handleLogin(event) {
 }
 
 async function handleLogout() {
-  await logoutFromApi(state.session?.apiToken);
+  await logoutFromApi();
   state.session = null;
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORE_KEY, JSON.stringify(getPersistableState(state)));
   showLogin();
 }
 
@@ -2580,7 +2592,7 @@ async function refreshActivityLog() {
     activityPaging.collections = Array.isArray(result.collections) ? result.collections : [];
     state.auditLogs = Array.isArray(result.items) ? result.items : [];
   }
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORE_KEY, JSON.stringify(getPersistableState(state)));
   refreshActivityView();
 }
 
@@ -2854,7 +2866,7 @@ function renderSettings() {
       <article class="card">
         <p class="eyebrow">Seguranca</p>
         <h3>Politicas administrativas</h3>
-        <p>O MVP ja controla acesso por perfil e registra historico basico de atividades. As proximas camadas recomendadas sao senha criptografada no backend, 2FA e sessoes seguras por cookie HTTP-only.</p>
+        <p>O sistema controla acesso por perfil, registra historico de atividades, usa senha com hash no backend e autentica por cookie HttpOnly. As proximas camadas recomendadas sao recuperacao de senha, 2FA e politicas avancadas de acesso.</p>
       </article>
       <article class="card">
         <p class="eyebrow">Roadmap</p>
