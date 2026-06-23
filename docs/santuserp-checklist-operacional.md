@@ -176,3 +176,16 @@ Conferir:
 5. Conferir painel de saude.
 6. Salvar no Git.
 7. Enviar ao GitHub.
+
+## 12. Rotina recomendada antes de release
+
+1. Conferir `.env` do ambiente.
+2. Rodar `npm run check`.
+3. Rodar `npm run smoke`.
+4. Rodar `npm run migrate:dry`.
+5. Gerar backup com `npm run backup`.
+6. Aplicar migrations com `npm run migrate:apply`.
+7. Reiniciar com `node scripts\santuserp-service.js restart --env .env.production`.
+8. Conferir `node scripts\santuserp-service.js status`.
+9. Conferir `logs/santuserp.err.log`.
+10. Fazer login e abrir `Configuracoes > Saude do sistema`.

@@ -23,6 +23,7 @@ function main() {
   checkDatabase();
   checkBackups();
   checkScripts();
+  checkEnvironmentExamples();
 
   if (args.has("--with-smoke")) {
     checkSmokeTest();
@@ -156,10 +157,23 @@ function checkScripts() {
     "seed-postgres-demo.js",
     "apply-postgres-migrations.js",
     "postgres-migrations.js",
+    "santuserp-service.js",
+    "santuserp-service.ps1",
     "smoke-test.js"
   ];
   const missing = requiredScripts.filter((script) => !fs.existsSync(path.join(root, "scripts", script)));
   addResult("Scripts operacionais", missing.length ? "falha" : "ok", missing.length ? `Faltando: ${missing.join(", ")}` : "Scripts principais encontrados.");
+}
+
+function checkEnvironmentExamples() {
+  const requiredFiles = [
+    ".env.example",
+    "config/.env.development.example",
+    "config/.env.staging.example",
+    "config/.env.production.example"
+  ];
+  const missing = requiredFiles.filter((file) => !fs.existsSync(path.join(root, file)));
+  addResult("Modelos de ambiente", missing.length ? "falha" : "ok", missing.length ? `Faltando: ${missing.join(", ")}` : "Development, staging e production documentados.");
 }
 
 function checkSmokeTest() {

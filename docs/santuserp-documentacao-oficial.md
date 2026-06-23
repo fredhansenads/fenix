@@ -62,7 +62,10 @@ scripts/apply-postgres-migrations.js Migrations PostgreSQL
 docs/santuserp-checklist-operacional.md Checklist operacional local
 docs/santuserp-ambiente-local.md       Guia de ambiente local
 docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
+docs/santuserp-deploy.md               Guia de deploy e ambientes
 scripts/start-santuserp.ps1            Inicializador local Windows
+scripts/santuserp-service.ps1          Start, stop, restart e status em background
+scripts/santuserp-service.js           Controlador de servico em background
 scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
@@ -364,7 +367,34 @@ node scripts\restore-postgres.js --latest --apply --confirm=RESTORE
 
 A restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. Em seguida, limpa o schema `public` e aplica o `.sql`. Esse fluxo e destrutivo para o banco atual e deve ser usado apenas quando a restauracao for realmente desejada.
 
-## 13. Testes basicos
+## 13. Deploy e ambientes
+
+O guia completo esta em:
+
+```text
+docs/santuserp-deploy.md
+```
+
+Modelos de ambiente:
+
+```text
+config/.env.development.example
+config/.env.staging.example
+config/.env.production.example
+```
+
+Comandos de servico:
+
+```powershell
+node scripts\santuserp-service.js status
+node scripts\santuserp-service.js start --env .env.production
+node scripts\santuserp-service.js restart --env .env.production
+node scripts\santuserp-service.js stop
+```
+
+Em `NODE_ENV=production`, o SantusERP exige PostgreSQL e cookies seguros devem ser usados atras de HTTPS.
+
+## 14. Testes basicos
 
 Para executar uma validacao automatizada basica:
 
@@ -389,7 +419,7 @@ Fluxos validados:
 
 Esse teste usa o banco configurado no `.env`, portanto deve ser executado em ambiente local/controlado.
 
-## 14. Checklist operacional
+## 15. Checklist operacional
 
 Checklist manual:
 
@@ -411,7 +441,7 @@ node scripts\ops-check.js --with-smoke
 
 Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais e, opcionalmente, os principais fluxos da API.
 
-## 15. Ambiente local empacotado
+## 16. Ambiente local empacotado
 
 Inicializador Windows:
 
@@ -447,7 +477,7 @@ Guia operacional:
 docs/santuserp-ambiente-local.md
 ```
 
-## 16. API local
+## 17. API local
 
 ### Autenticacao
 
@@ -532,7 +562,7 @@ Rotas vinculadas ao usuario autenticado. O frontend usa essas rotas para marcar 
 
 Restrita a `admin` e `gestor`.
 
-## 17. Regras de negocio atuais
+## 18. Regras de negocio atuais
 
 - Usuario precisa estar ativo para login.
 - Senhas sao armazenadas com hash `scrypt` pela API.
@@ -548,7 +578,7 @@ Restrita a `admin` e `gestor`.
 - Tentativas sem permissao nao alteram dados.
 - O frontend encerra a sessao quando recebe `401 Unauthorized`.
 
-## 18. Indicadores e relatorios
+## 19. Indicadores e relatorios
 
 Indicadores acompanhados:
 
@@ -569,7 +599,7 @@ Indicadores acompanhados:
 
 Relatorios podem ser filtrados por periodo e exportados em CSV.
 
-## 19. Status da Fase 1
+## 20. Status da Fase 1
 
 Fase 1 concluida no escopo do MVP:
 
@@ -586,7 +616,7 @@ Fase 1 concluida no escopo do MVP:
 - Tarefas.
 - Relatorios basicos.
 
-## 20. Status da Fase 2
+## 21. Status da Fase 2
 
 Fase 2 concluida no escopo planejado:
 
@@ -614,8 +644,9 @@ Fase 2 concluida no escopo planejado:
 - Checklist operacional manual e automatizado.
 - Modelo multiempresa/multicliente com empresas, `tenant_id`, usuarios vinculados por empresa e isolamento nas rotas principais.
 - Migrations PostgreSQL versionadas com tabela `schema_migrations`, comando manual e aplicacao automatica pelo servidor.
+- Deploy e ambientes documentados com modelos de `.env`, script de servico, checklist de release e rollback.
 
-## 21. Status da Fase 3
+## 22. Status da Fase 3
 
 Fase 3 iniciada:
 
@@ -626,13 +657,13 @@ Fase 3 iniciada:
 - Geracao automatica de tarefas de acompanhamento.
 - Marcadores internos para evitar duplicidade de tarefas automatizadas.
 
-## 22. Proximas etapas recomendadas
+## 23. Proximas etapas recomendadas
 
-1. Preparar deploy, homologacao e producao.
+1. Fortalecer seguranca e compliance.
 2. Expandir automacoes com regras configuraveis.
 3. Iniciar assistente de IA para analise executiva.
 
-## 23. Criterios de sucesso
+## 24. Criterios de sucesso
 
 O projeto e considerado saudavel quando:
 

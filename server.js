@@ -10,6 +10,7 @@ const root = __dirname;
 loadEnvFile(path.join(root, ".env"));
 const dataDir = path.join(root, "data");
 const databaseFile = path.join(dataDir, "fenix-db.json");
+validateRuntimeConfig();
 const databaseRepository = process.env.DATABASE_URL || process.env.PGDATABASE
   ? createPostgresDatabaseRepository()
   : createJsonDatabaseRepository(databaseFile);
@@ -838,6 +839,15 @@ function buildCookie(name, value, options = {}) {
 
 function shouldUseSecureCookies() {
   return process.env.SANTUSERP_SECURE_COOKIES === "true" || process.env.NODE_ENV === "production";
+}
+
+function validateRuntimeConfig() {
+  const isProduction = process.env.NODE_ENV === "production";
+  const hasPostgres = Boolean(process.env.DATABASE_URL || process.env.PGDATABASE);
+  const allowJsonProduction = process.env.SANTUSERP_ALLOW_JSON_IN_PRODUCTION === "true";
+  if (isProduction && !hasPostgres && !allowJsonProduction) {
+    throw new Error("PostgreSQL e obrigatorio em NODE_ENV=production. Configure DATABASE_URL/PG* ou use SANTUSERP_ALLOW_JSON_IN_PRODUCTION=true apenas para diagnostico controlado.");
+  }
 }
 
 function getLoginAttemptKey(request, email) {

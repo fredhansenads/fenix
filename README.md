@@ -10,6 +10,7 @@ A documentacao consolidada do sistema esta em:
 - `docs/santuserp-checklist-operacional.md`
 - `docs/santuserp-ambiente-local.md`
 - `docs/santuserp-roadmap-producao.md`
+- `docs/santuserp-deploy.md`
 
 Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases, roadmap de producao e proximas etapas recomendadas.
 
@@ -147,11 +148,15 @@ npm run migrate:list
 npm run migrate:dry
 npm run migrate:apply
 npm run backup
+npm run service:status
+npm run service:start
 ```
 
 No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use `npm.cmd` nos mesmos comandos, por exemplo `npm.cmd run check`.
 
 O guia completo de ambiente local esta em `docs/santuserp-ambiente-local.md`.
+
+O guia de deploy, ambientes, release e rollback esta em `docs/santuserp-deploy.md`.
 
 ## API local
 
@@ -250,4 +255,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e preparar deploy, homologacao e producao com variaveis de ambiente separadas, HTTPS, processo de start/restart e checklist de release.
+A proxima etapa recomendada e fortalecer seguranca e compliance: recuperacao de senha, politica de senha forte, 2FA administrativo, auditoria de login e preparacao LGPD.

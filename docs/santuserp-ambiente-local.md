@@ -54,9 +54,16 @@ npm start
 npm run check
 npm run check:full
 npm run smoke
+npm run migrate:list
+npm run migrate:dry
+npm run migrate:apply
 npm run backup
 npm run restore:list
 npm run seed:demo
+npm run service:status
+npm run service:start
+npm run service:restart
+npm run service:stop
 ```
 
 No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use `npm.cmd` nos mesmos comandos:
@@ -71,9 +78,13 @@ Principais usos:
 - `npm run check`: valida Node.js, PostgreSQL, tabelas, backups e scripts.
 - `npm run check:full`: executa checklist operacional com smoke test.
 - `npm run smoke`: sobe API temporaria e valida login, PostgreSQL, bootstrap, cliente, auditoria e notificacoes.
+- `npm run migrate:list`: lista migrations aplicadas e pendentes.
+- `npm run migrate:dry`: simula aplicacao de migrations.
+- `npm run migrate:apply`: aplica migrations pendentes.
 - `npm run backup`: gera backup SQL local em `backups/`.
 - `npm run restore:list`: lista backups disponiveis.
 - `npm run seed:demo`: recria dados demonstrativos no PostgreSQL.
+- `npm run service:*`: controla o processo em background por PowerShell.
 
 ## 5. Rotina recomendada
 
@@ -160,3 +171,27 @@ Com este guia, o SantusERP passa a ter:
 - Checklist operacional de ambiente.
 - Smoke test automatizado.
 - Rotina documentada de backup e diagnostico.
+
+## 10. Operacao em background
+
+Para deixar o SantusERP rodando sem manter o terminal aberto:
+
+```powershell
+node scripts\santuserp-service.js start
+node scripts\santuserp-service.js status
+node scripts\santuserp-service.js restart
+node scripts\santuserp-service.js stop
+```
+
+Para usar um arquivo especifico de ambiente:
+
+```powershell
+node scripts\santuserp-service.js start --env .env.production
+```
+
+Logs:
+
+```text
+logs/santuserp.out.log
+logs/santuserp.err.log
+```

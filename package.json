@@ -13,7 +13,11 @@
     "migrate:apply": "node scripts/apply-postgres-migrations.js --apply",
     "backup": "node scripts/backup-postgres.js",
     "restore:list": "node scripts/restore-postgres.js --list",
-    "seed:demo": "node scripts/seed-postgres-demo.js"
+    "seed:demo": "node scripts/seed-postgres-demo.js",
+    "service:start": "node scripts/santuserp-service.js start",
+    "service:stop": "node scripts/santuserp-service.js stop",
+    "service:restart": "node scripts/santuserp-service.js restart",
+    "service:status": "node scripts/santuserp-service.js status"
   },
   "engines": {
     "node": ">=18"

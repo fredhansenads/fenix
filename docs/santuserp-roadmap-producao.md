@@ -10,6 +10,7 @@ Status geral atual:
 - Etapa 1 deste roadmap ja iniciada/concluida: sessoes fortalecidas com cookie `HttpOnly`, `SameSite=Lax`, limite basico de login e remocao do token puro do `localStorage`.
 - Etapa 2 deste roadmap concluida: modelo multiempresa/multicliente com empresas, `tenant_id`, vinculo de usuarios e isolamento por sessao nas rotas principais.
 - Etapa 3 deste roadmap concluida: migrations PostgreSQL versionadas, tabela `schema_migrations`, comandos de aplicacao/listagem/dry-run e aplicacao automatica pelo servidor.
+- Etapa 4 deste roadmap concluida: ambientes documentados, modelos de `.env`, processo de servico, release, rollback e exigencia de PostgreSQL em producao.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -106,20 +107,20 @@ Separar desenvolvimento, homologacao e producao.
 
 Entregas principais:
 
-- Variaveis de ambiente por ambiente.
-- `NODE_ENV=production`.
-- Cookies seguros em producao.
-- Servidor com HTTPS.
-- Dominio/subdominio definido.
-- Processo de start/stop/restart documentado.
-- Opcional: Dockerfile e docker-compose.
-- Checklist de release.
+- Variaveis de ambiente por ambiente. Concluido com modelos para desenvolvimento, homologacao e producao.
+- `NODE_ENV=production`. Concluido e validado no servidor.
+- Cookies seguros em producao. Concluido via `SANTUSERP_SECURE_COOKIES=true` ou `NODE_ENV=production`.
+- Servidor com HTTPS. Documentado via proxy reverso HTTPS.
+- Dominio/subdominio definido. Documentado como decisao operacional de deploy.
+- Processo de start/stop/restart documentado. Concluido com `scripts/santuserp-service.ps1`.
+- Opcional: Dockerfile e docker-compose. Mantido como opcional para etapa futura de infraestrutura.
+- Checklist de release. Concluido em `docs/santuserp-deploy.md`.
 
 Criterio de conclusao:
 
-- Sistema sobe em ambiente limpo sem passos manuais confusos.
-- Configuracao sensivel fica fora do Git.
-- Producao pode ser reiniciada com procedimento documentado.
+- Sistema sobe em ambiente limpo sem passos manuais confusos. Implementado com guia e scripts.
+- Configuracao sensivel fica fora do Git. Implementado por exemplos versionados e `.env` ignorado.
+- Producao pode ser reiniciada com procedimento documentado. Implementado.
 
 ## 5. Fortalecer seguranca e compliance
 
@@ -277,7 +278,7 @@ Criterio de conclusao:
 1. Finalizar refinamentos da autenticacao.
 2. Implementar multiempresa/multicliente. Concluido.
 3. Criar migrations formais. Concluido.
-4. Preparar deploy/homologacao/producao.
+4. Preparar deploy/homologacao/producao. Concluido.
 5. Reforcar compliance e auditoria.
 6. Melhorar UX/onboarding.
 7. Completar funcionalidades essenciais de produto.
@@ -287,12 +288,12 @@ Criterio de conclusao:
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 4 - deploy e ambientes**, porque o banco ja possui caminho formal de evolucao e agora o sistema precisa separar desenvolvimento, homologacao e producao.
+A proxima etapa mais importante e a **Etapa 5 - seguranca e compliance**, porque o sistema ja possui base operacional para deploy e agora precisa reforcar recuperacao de senha, politica de senha, auditoria de acesso e preparacao LGPD.
 
-Primeira entrega sugerida da Etapa 4:
+Primeira entrega sugerida da Etapa 5:
 
-- Definir variaveis de ambiente por ambiente.
-- Preparar `NODE_ENV=production` e cookies seguros.
-- Documentar start, stop, restart e release.
-- Planejar HTTPS, dominio e backup antes do deploy.
+- Implementar recuperacao de senha com token temporario.
+- Registrar login, logout e falhas de login na auditoria.
+- Definir politica de senha forte.
+- Criar base inicial para exportacao/remocao controlada de dados por cliente.
 
