@@ -5,7 +5,7 @@ const API_HEALTH_URL = "/api/health";
 const API_NOTIFICATION_READS_URL = "/api/notification-reads";
 const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
-const API_COLLECTIONS = new Set(["users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
+const API_COLLECTIONS = new Set(["tenants", "users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
   { id: "dashboard", label: "Dashboard", title: "Visao geral", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
@@ -20,6 +20,7 @@ const modules = [
   { id: "notifications", label: "Notificacoes", title: "Notificacoes internas", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
   { id: "automations", label: "Automacoes", title: "Automacoes", roles: ["admin", "gestor", "financeiro", "comercial", "operacional"] },
   { id: "activity", label: "Historico", title: "Historico de atividades", roles: ["admin", "gestor"] },
+  { id: "tenants", label: "Empresas", title: "Empresas atendidas", roles: ["admin"] },
   { id: "users", label: "Usuarios", title: "Usuarios e permissoes", roles: ["admin"] },
   { id: "settings", label: "Configuracoes", title: "Configuracoes administrativas", roles: ["admin"] }
 ];
@@ -35,6 +36,7 @@ const roleLabels = {
 };
 
 const actionPermissions = {
+  tenants: { create: ["admin"], edit: ["admin"], delete: ["admin"] },
   clients: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
   suppliers: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
   payables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
@@ -50,9 +52,12 @@ const initialData = {
   session: null,
   auditLogs: [],
   notificationReads: [],
+  tenants: [
+    { id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP." }
+  ],
   users: [
-    { id: uid(), name: "Administrador SANTUS", email: "admin@santus.com", password: "santus123", role: "admin", status: "ativo" },
-    { id: uid(), name: "Gestor Comercial", email: "comercial@santus.com", password: "santus123", role: "comercial", status: "ativo" }
+    { id: uid(), tenantId: "tenant_santus", name: "Administrador SANTUS", email: "admin@santus.com", password: "santus123", role: "admin", status: "ativo" },
+    { id: uid(), tenantId: "tenant_santus", name: "Gestor Comercial", email: "comercial@santus.com", password: "santus123", role: "comercial", status: "ativo" }
   ],
   clients: [
     { id: uid(), type: "PJ", name: "Nexus Digital", document: "12.345.678/0001-90", email: "contato@nexus.com", phone: "(11) 98888-1000", status: "ativo", notes: "Cliente recorrente de tecnologia." },
@@ -170,6 +175,7 @@ function normalizeState(savedState) {
   const normalized = { ...structuredClone(initialData), ...savedState };
   [
     "users",
+    "tenants",
     "clients",
     "suppliers",
     "categories",
@@ -185,6 +191,16 @@ function normalizeState(savedState) {
     if (!Array.isArray(normalized[collection])) {
       normalized[collection] = [];
     }
+  });
+  if (!normalized.tenants.some((tenant) => tenant.id === "tenant_santus")) {
+    normalized.tenants.unshift({ id: "tenant_santus", name: "SANTUS", document: "00.000.000/0001-00", email: "admin@santus.com", phone: "", status: "ativo", notes: "Empresa padrao do SantusERP." });
+  }
+  ["users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"].forEach((collection) => {
+    normalized[collection].forEach((record) => {
+      if (!record.tenantId) {
+        record.tenantId = "tenant_santus";
+      }
+    });
   });
   normalized.notificationReads = normalizeNotificationReads(normalized.notificationReads);
   return normalized;
@@ -588,6 +604,9 @@ async function handleLogin(event) {
 
   state.session = {
     userId: user.id,
+    tenantId: apiSession?.tenant?.id || user.tenantId || "tenant_santus",
+    tenantName: apiSession?.tenant?.name || state.tenants.find((tenant) => tenant.id === user.tenantId)?.name || "SANTUS",
+    isGlobalAdmin: Boolean(apiSession?.isGlobalAdmin),
     loggedAt: new Date().toISOString(),
     apiToken: "",
     apiTokenExpiresAt: apiSession?.expiresAt || ""
@@ -625,14 +644,17 @@ function canAccess(module) {
 }
 
 function canCreate(schemaId) {
+  if (schemaId === "tenants" && !state.session?.isGlobalAdmin) return false;
   return canPerform(schemaId, "create");
 }
 
 function canEdit(schemaId) {
+  if (schemaId === "tenants" && !state.session?.isGlobalAdmin) return false;
   return canPerform(schemaId, "edit");
 }
 
 function canDelete(schemaId) {
+  if (schemaId === "tenants" && !state.session?.isGlobalAdmin) return false;
   return canPerform(schemaId, "delete");
 }
 
@@ -658,7 +680,8 @@ function renderAccessDenied(message = "Seu perfil nao possui permissao para esta
 
 function renderNavigation() {
   const user = getSessionUser();
-  currentUser.textContent = `${user.name} · ${roleLabels[user.role]}`;
+  const tenantName = state.session?.tenantName || state.tenants.find((tenant) => tenant.id === user.tenantId)?.name || "SANTUS";
+  currentUser.textContent = `${user.name} - ${tenantName} - ${roleLabels[user.role]}`;
   mainNav.innerHTML = modules
     .filter(canAccess)
     .map((module) => `<button type="button" data-module="${module.id}">${module.label}</button>`)
@@ -702,6 +725,7 @@ function navigate(moduleId) {
     notifications: renderNotifications,
     automations: renderAutomations,
     activity: renderActivity,
+    tenants: () => renderCrud("tenants"),
     users: () => renderCrud("users"),
     settings: renderSettings
   };
@@ -1149,6 +1173,20 @@ function formatDate(value) {
 }
 
 const schemas = {
+  tenants: {
+    label: "empresa",
+    collection: "tenants",
+    required: ["name", "document", "status"],
+    fields: [
+      ["name", "Nome da empresa", "text"],
+      ["document", "CNPJ/Documento", "text"],
+      ["email", "E-mail", "email"],
+      ["phone", "Telefone", "text"],
+      ["status", "Status", "select", ["ativo", "suspenso", "inativo"]],
+      ["notes", "Observacoes", "textarea", null, "full"]
+    ],
+    columns: ["name", "document", "email", "phone", "status"]
+  },
   clients: {
     label: "cliente",
     collection: "clients",
@@ -1245,15 +1283,16 @@ const schemas = {
   users: {
     label: "usuario",
     collection: "users",
-    required: ["name", "email", "password", "role", "status"],
+    required: ["tenantId", "name", "email", "password", "role", "status"],
     fields: [
+      ["tenantId", "Empresa", "relation", "tenants"],
       ["name", "Nome", "text"],
       ["email", "E-mail", "email"],
       ["password", "Senha", "text"],
       ["role", "Perfil", "select", Object.keys(roleLabels)],
       ["status", "Status", "select", ["ativo", "inativo"]]
     ],
-    columns: ["name", "email", "role", "status"]
+    columns: ["name", "email", "tenantId", "role", "status"]
   },
   payables: {
     label: "conta a pagar",
@@ -1455,6 +1494,7 @@ function columnLabel(column) {
     supplierId: "Fornecedor",
     projectId: "Projeto",
     responsibleId: "Responsavel",
+    tenantId: "Empresa",
     amount: "Valor",
     validUntil: "Validade",
     startDate: "Inicio",
@@ -1476,6 +1516,7 @@ function formatCell(column, value) {
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "-";
   if (column === "projectId") return state.projects.find((item) => item.id === value)?.name || "-";
   if (column === "responsibleId") return state.users.find((item) => item.id === value)?.name || "-";
+  if (column === "tenantId") return state.tenants.find((item) => item.id === value)?.name || "-";
   return value || "-";
 }
 
@@ -1487,6 +1528,7 @@ function formatCellText(column, value) {
   if (column === "supplierId") return state.suppliers.find((item) => item.id === value)?.name || "";
   if (column === "projectId") return state.projects.find((item) => item.id === value)?.name || "";
   if (column === "responsibleId") return state.users.find((item) => item.id === value)?.name || "";
+  if (column === "tenantId") return state.tenants.find((item) => item.id === value)?.name || "";
   return value || "";
 }
 

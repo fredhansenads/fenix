@@ -53,6 +53,7 @@ No Windows, tambem e possivel usar o inicializador local:
 - Notificacoes internas
 - Automacoes iniciais para gerar tarefas de acompanhamento
 - Historico de atividades
+- Empresas e isolamento multiempresa
 - Configuracoes administrativas
 - Listas responsivas com leitura otimizada no mobile
 
@@ -66,7 +67,7 @@ Esta versao usa uma persistencia hibrida:
 
 O backend concentra leitura e escrita em uma camada simples de repositorio. Essa separacao permite alternar entre PostgreSQL e JSON sem alterar diretamente as rotas e regras de negocio.
 
-O arquivo `docs/postgres-schema.sql` contem o schema PostgreSQL inicial, cobrindo os modulos atuais, relacionamentos, restricoes, auditoria e notificacoes lidas.
+O arquivo `docs/postgres-schema.sql` contem o schema PostgreSQL inicial, cobrindo os modulos atuais, empresas/tenants, relacionamentos, restricoes, auditoria e notificacoes lidas.
 
 O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
 
@@ -80,7 +81,7 @@ Para popular o PostgreSQL com dados demonstrativos completos do ERP, use:
 node scripts/seed-postgres-demo.js
 ```
 
-Esse seed recria uma base de demonstracao com usuarios, clientes, fornecedores, categorias, contas a pagar, contas a receber, propostas, contratos, projetos e tarefas. Ele le o arquivo `.env` automaticamente.
+Esse seed recria uma base de demonstracao com empresa padrao, usuarios, clientes, fornecedores, categorias, contas a pagar, contas a receber, propostas, contratos, projetos e tarefas. Ele le o arquivo `.env` automaticamente.
 
 Para gerar um backup SQL local do PostgreSQL, use:
 
@@ -238,4 +239,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e reduzir gradualmente a dependencia do endpoint `/api/state`, adicionar recuperacao de senha e preparar isolamento multiempresa para clientes reais.
+A proxima etapa recomendada e criar migrations formais para versionar alteracoes estruturais do banco, comecando pela migracao multiempresa ja aplicada de forma idempotente pelo servidor.

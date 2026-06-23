@@ -78,6 +78,7 @@ function checkCommand(label, command, args) {
 
 function checkDatabase() {
   const expectedTables = [
+    "tenants",
     "users",
     "clients",
     "suppliers",
@@ -113,6 +114,7 @@ ORDER BY table_name;
 
   const counts = runPsql(`
 SELECT 'users=' || count(*) FROM users
+UNION ALL SELECT 'tenants=' || count(*) FROM tenants
 UNION ALL SELECT 'clients=' || count(*) FROM clients
 UNION ALL SELECT 'audit_logs=' || count(*) FROM audit_logs;
 `);

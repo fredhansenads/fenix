@@ -8,6 +8,7 @@ Status geral atual:
 - Fase 2 concluida no escopo planejado.
 - Fase 3 iniciada com automacoes iniciais.
 - Etapa 1 deste roadmap ja iniciada/concluida: sessoes fortalecidas com cookie `HttpOnly`, `SameSite=Lax`, limite basico de login e remocao do token puro do `localStorage`.
+- Etapa 2 deste roadmap concluida: modelo multiempresa/multicliente com empresas, `tenant_id`, vinculo de usuarios e isolamento por sessao nas rotas principais.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -54,13 +55,13 @@ Permitir que o SantusERP atenda clientes reais com isolamento de dados.
 
 Entregas principais:
 
-- Tabela de empresas/tenants.
-- Campo `tenant_id` nas entidades principais.
-- Vinculo entre usuarios e empresa.
-- Isolamento de consultas por empresa.
-- Isolamento de criacao, edicao e exclusao por empresa.
-- Perfil de administrador global e administrador da empresa.
-- Tela administrativa para empresas/clientes do sistema.
+- Tabela de empresas/tenants. Concluido.
+- Campo `tenant_id` nas entidades principais. Concluido.
+- Vinculo entre usuarios e empresa. Concluido.
+- Isolamento de consultas por empresa. Concluido nas rotas principais.
+- Isolamento de criacao, edicao e exclusao por empresa. Concluido nas rotas principais.
+- Perfil de administrador global e administrador da empresa. Concluido por sessao e e-mail de admin global configuravel.
+- Tela administrativa para empresas/clientes do sistema. Concluida como modulo Empresas.
 
 Riscos:
 
@@ -70,9 +71,9 @@ Riscos:
 
 Criterio de conclusao:
 
-- Um usuario de uma empresa nao enxerga dados de outra.
-- Todas as rotas principais respeitam `tenant_id`.
-- Smoke test cobre pelo menos dois tenants.
+- Um usuario de uma empresa nao enxerga dados de outra. Implementado por filtro de sessao.
+- Todas as rotas principais respeitam `tenant_id`. Implementado.
+- Smoke test cobre login, bootstrap com tenant, CRUD, auditoria e isolamento entre dois tenants.
 
 ## 3. Profissionalizar banco de dados e migrations
 
@@ -273,7 +274,7 @@ Criterio de conclusao:
 ## Ordem recomendada de implementacao
 
 1. Finalizar refinamentos da autenticacao.
-2. Implementar multiempresa/multicliente.
+2. Implementar multiempresa/multicliente. Concluido.
 3. Criar migrations formais.
 4. Preparar deploy/homologacao/producao.
 5. Reforcar compliance e auditoria.
@@ -285,12 +286,12 @@ Criterio de conclusao:
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 2 - modelo multiempresa/multicliente**, porque ela define a base para atender clientes reais sem misturar dados.
+A proxima etapa mais importante e a **Etapa 3 - banco de dados e migrations**, porque o sistema ja recebeu alteracoes estruturais relevantes e precisa de um fluxo formal para evoluir schema sem risco operacional.
 
-Primeira entrega sugerida da Etapa 2:
+Primeira entrega sugerida da Etapa 3:
 
-- Criar conceito de empresa/tenant.
-- Adicionar empresa padrao para os dados atuais.
-- Vincular usuarios a empresa.
-- Comecar filtragem por empresa nas rotas principais.
+- Criar pasta de migrations versionadas.
+- Registrar migrations aplicadas no banco.
+- Transformar a migracao multiempresa atual em migration formal.
+- Documentar comando padrao para aplicar migrations em ambiente local, homologacao e producao.
 

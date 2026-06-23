@@ -29,6 +29,7 @@ const types = {
 };
 
 const collections = new Set([
+  "tenants",
   "users",
   "clients",
   "suppliers",
@@ -41,7 +42,28 @@ const collections = new Set([
   "tasks"
 ]);
 
+const defaultTenantId = "tenant_santus";
+const defaultTenantName = "SANTUS";
+const tenantScopedCollections = new Set([
+  "users",
+  "clients",
+  "suppliers",
+  "categories",
+  "payables",
+  "receivables",
+  "proposals",
+  "contracts",
+  "projects",
+  "tasks",
+  "auditLogs"
+]);
+const globalAdminEmails = (process.env.SANTUSERP_GLOBAL_ADMIN_EMAILS || "admin@santus.com")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 const actionPermissions = {
+  tenants: { create: ["admin"], edit: ["admin"], delete: ["admin"] },
   clients: { create: ["admin", "gestor", "comercial"], edit: ["admin", "gestor", "comercial"], delete: ["admin", "gestor"] },
   suppliers: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
   payables: { create: ["admin", "gestor", "financeiro"], edit: ["admin", "gestor", "financeiro"], delete: ["admin", "gestor"] },
@@ -54,8 +76,14 @@ const actionPermissions = {
 };
 
 const validationRules = {
+  tenants: {
+    required: ["name", "document", "status"],
+    allowed: {
+      status: ["ativo", "suspenso", "inativo"]
+    }
+  },
   users: {
-    required: ["name", "email", "role", "status"],
+    required: ["name", "email", "role", "status", "tenantId"],
     allowed: {
       role: ["admin", "gestor", "financeiro", "comercial", "operacional", "colaborador", "visualizador"],
       status: ["ativo", "inativo"]
@@ -214,7 +242,11 @@ async function handleLoginApi(request, response) {
     return;
   }
   const database = await readDatabase();
-  const users = database.exists && Array.isArray(database.data.users) ? database.data.users : [];
+  const data = ensureTenantModel(database.exists ? database.data : {});
+  if (database.exists && data !== database.data) {
+    await writeDatabase(data);
+  }
+  const users = database.exists && Array.isArray(data.users) ? data.users : [];
   const user = users.find((item) => String(item.email || "").toLowerCase() === email && verifyPassword(password, item) && item.status === "ativo");
 
   if (!user) {
@@ -233,29 +265,37 @@ async function handleLoginApi(request, response) {
 
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + sessionTtlMs).toISOString();
-  sessions.set(token, {
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    expiresAt
-  });
+  const session = buildSession(user, data, expiresAt);
+  sessions.set(token, session);
   if (databaseRepository.saveSession) {
-    await databaseRepository.saveSession(token, {
-      id: user.id,
-      name: user.name,
-      role: user.role,
-      expiresAt
-    });
+    await databaseRepository.saveSession(token, session);
   }
 
   sendJson(response, 200, {
     token,
     expiresAt,
     authMode: "cookie",
-    user: sanitizeUser(user)
+    user: sanitizeUser(user),
+    tenant: getTenantForUser(data, user),
+    isGlobalAdmin: session.isGlobalAdmin
   }, {
     "Set-Cookie": buildSessionCookie(token, expiresAt)
   });
+}
+
+function buildSession(user, data, expiresAt) {
+  const tenant = getTenantForUser(data, user);
+  const email = String(user.email || "").toLowerCase();
+  return {
+    id: user.id,
+    name: user.name,
+    email,
+    role: user.role,
+    tenantId: tenant.id,
+    tenantName: tenant.name,
+    isGlobalAdmin: isGlobalAdminUser(user),
+    expiresAt
+  };
 }
 
 async function handleLogoutApi(request, response) {
@@ -294,7 +334,7 @@ async function handleBootstrapApi(request, response) {
     return;
   }
 
-  const state = sanitizeState(database.data);
+  const state = sanitizeState(scopeDataForSession(ensureTenantModel(database.data), session));
   state.session = null;
   state.notificationReads = getNotificationReadIds(database.data, session.id);
   if (!["admin", "gestor"].includes(session.role)) {
@@ -307,21 +347,33 @@ async function handleStateApi(request, response) {
   const database = await readDatabase();
 
   if (request.method === "GET") {
-    if (database.exists && !(await authorizeSessionRoles(request, response, ["admin"]))) return;
-    sendJson(response, database.exists ? 200 : 404, database.exists ? sanitizeState(database.data) : { error: "Database not initialized" });
+    const session = database.exists ? await getSessionFromRequest(request) : null;
+    if (database.exists && !session) {
+      sendUnauthorized(response);
+      return;
+    }
+    sendJson(response, database.exists ? 200 : 404, database.exists ? sanitizeState(scopeDataForSession(ensureTenantModel(database.data), session)) : { error: "Database not initialized" });
     return;
   }
 
   if (request.method === "PUT") {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    if (database.exists && !(await authorizeSessionRoles(request, response, ["admin"]))) return;
-    const currentLog = database.exists && Array.isArray(database.data.auditLogs) ? database.data.auditLogs : [];
+    const session = database.exists ? await getSessionFromRequest(request) : null;
+    if (database.exists && (!session || !session.isGlobalAdmin)) {
+      sendJson(response, 403, {
+        error: "Forbidden",
+        message: "Apenas administrador global pode substituir o estado completo do sistema."
+      });
+      return;
+    }
+    const currentData = database.exists ? ensureTenantModel(database.data) : {};
+    const currentLog = database.exists && Array.isArray(currentData.auditLogs) ? currentData.auditLogs : [];
     const payloadLog = Array.isArray(payload.auditLogs) ? payload.auditLogs : [];
     const nextPayload = prepareDatabasePayload({
       ...payload,
       auditLogs: currentLog.length >= payloadLog.length ? currentLog : payloadLog
-    }, database.exists ? database.data : {});
+    }, currentData);
     await writeDatabase(nextPayload);
     sendJson(response, 200, { ok: true });
     return;
@@ -383,7 +435,8 @@ async function handleHealthApi(request, response) {
 
   try {
     const database = await readDatabase();
-    const data = database.exists ? database.data : {};
+    const session = await getSessionFromRequest(request);
+    const data = database.exists ? scopeDataForSession(ensureTenantModel(database.data), session) : {};
     sendJson(response, 200, {
       ok: true,
       source: databaseRepository.source,
@@ -411,7 +464,8 @@ async function handleActivityLogApi(request, response, requestUrl) {
   if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
 
   const database = await readDatabase();
-  const data = database.exists ? database.data : {};
+  const session = await getSessionFromRequest(request);
+  const data = database.exists ? scopeDataForSession(ensureTenantModel(database.data), session) : {};
   const logs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
   const params = requestUrl.searchParams;
 
@@ -442,17 +496,23 @@ async function handleActivityLogApi(request, response, requestUrl) {
 
 async function handleCollectionApi(request, response, collection, id) {
   const database = await readDatabase();
-  const data = database.exists ? database.data : {};
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    sendUnauthorized(response);
+    return;
+  }
+  const data = database.exists ? ensureTenantModel(database.data) : {};
   data[collection] = Array.isArray(data[collection]) ? data[collection] : [];
   data.auditLogs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
+  const scopedRecords = getScopedRecords(data[collection], collection, session);
 
   if (request.method === "GET") {
     if (id) {
-      const item = data[collection].find((record) => record.id === id);
+      const item = scopedRecords.find((record) => record.id === id);
       sendJson(response, item ? 200 : 404, item ? sanitizeRecord(collection, item) : { error: "Record not found" });
       return;
     }
-    sendJson(response, 200, data[collection].map((record) => sanitizeRecord(collection, record)));
+    sendJson(response, 200, scopedRecords.map((record) => sanitizeRecord(collection, record)));
     return;
   }
 
@@ -463,7 +523,7 @@ async function handleCollectionApi(request, response, collection, id) {
     }
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
-    const item = normalizeRecord(collection, { ...payload, id: payload.id || createId() });
+    const item = normalizeRecord(collection, applyTenantToRecord(collection, { ...payload, id: payload.id || createId() }, session, data));
     const validation = validateRecord(collection, item);
     if (!validation.valid) {
       sendJson(response, 400, validation);
@@ -484,12 +544,12 @@ async function handleCollectionApi(request, response, collection, id) {
     const payload = await parseJsonBody(request, response);
     if (!payload) return;
     const index = data[collection].findIndex((record) => record.id === id);
-    if (index === -1) {
+    if (index === -1 || !canAccessRecord(data[collection][index], collection, session)) {
       sendJson(response, 404, { error: "Record not found" });
       return;
     }
     const previousItem = data[collection][index];
-    const item = normalizeRecord(collection, { ...previousItem, ...payload, id });
+    const item = normalizeRecord(collection, applyTenantToRecord(collection, { ...previousItem, ...payload, id }, session, data, previousItem));
     const validation = validateRecord(collection, item);
     if (!validation.valid) {
       sendJson(response, 400, validation);
@@ -508,6 +568,10 @@ async function handleCollectionApi(request, response, collection, id) {
       return;
     }
     const item = data[collection].find((record) => record.id === id);
+    if (!item || !canAccessRecord(item, collection, session)) {
+      sendJson(response, 404, { error: "Record not found" });
+      return;
+    }
     const before = data[collection].length;
     data[collection] = data[collection].filter((record) => record.id !== id);
     if (data[collection].length === before) {
@@ -532,6 +596,17 @@ async function authorizeAction(request, response, collection, action, data = nul
   }
 
   const actor = authentication.actor;
+  if (collection === "tenants" && !actor.isGlobalAdmin) {
+    await addDeniedActivityLog(data, request, collection, action, "Apenas administrador global pode administrar empresas.");
+    sendJson(response, 403, {
+      error: "Forbidden",
+      message: "Apenas administrador global pode administrar empresas.",
+      action,
+      collection
+    });
+    return false;
+  }
+
   const allowedRoles = actionPermissions[collection]?.[action];
   if (!allowedRoles || allowedRoles.includes(actor.role)) {
     return true;
@@ -611,6 +686,7 @@ async function addActivityLog(data, request, action, collection, item, previousI
     actorId: actor.id,
     actorName: actor.name,
     actorRole: actor.role,
+    tenantId: actor.tenantId || defaultTenantId,
     changedFields: previousItem ? getChangedFields(previousItem, item) : [],
     metadata: getRequestMetadata(request),
     ...extra,
@@ -656,16 +732,16 @@ async function authenticateActor(request) {
       actor: {
         id: session.id,
         name: session.name,
-        role: session.role
+        email: session.email,
+        role: session.role,
+        tenantId: session.tenantId,
+        tenantName: session.tenantName,
+        isGlobalAdmin: Boolean(session.isGlobalAdmin)
       }
     };
   }
 
-  if (getRequestToken(request)) {
-    return { valid: false, actor: null };
-  }
-
-  return { valid: true, actor: getHeaderActor(request) };
+  return { valid: false, actor: null };
 }
 
 function getHeaderActor(request) {
@@ -805,8 +881,128 @@ function sanitizeRecord(collection, record) {
   return collection === "users" ? sanitizeUser(record) : record;
 }
 
+function ensureTenantModel(data) {
+  const next = data || {};
+  let changed = false;
+  if (!Array.isArray(next.tenants)) {
+    next.tenants = [];
+    changed = true;
+  }
+  if (!next.tenants.some((tenant) => tenant.id === defaultTenantId)) {
+    next.tenants.unshift({
+      id: defaultTenantId,
+      name: defaultTenantName,
+      document: "00.000.000/0001-00",
+      email: "admin@santus.com",
+      phone: "",
+      status: "ativo",
+      notes: "Empresa padrao criada para migrar os dados existentes."
+    });
+    changed = true;
+  }
+
+  tenantScopedCollections.forEach((collection) => {
+    next[collection] = Array.isArray(next[collection]) ? next[collection] : [];
+    next[collection].forEach((record) => {
+      if (!record.tenantId && !record.tenant_id) {
+        record.tenantId = defaultTenantId;
+        changed = true;
+      } else if (!record.tenantId && record.tenant_id) {
+        record.tenantId = record.tenant_id;
+        changed = true;
+      }
+    });
+  });
+
+  return changed ? next : data;
+}
+
+function scopeDataForSession(data, session) {
+  const normalized = ensureTenantModel(structuredClone(data || {}));
+  if (!session || session.isGlobalAdmin) {
+    return normalized;
+  }
+
+  tenantScopedCollections.forEach((collection) => {
+    normalized[collection] = getScopedRecords(normalized[collection], collection, session);
+  });
+  normalized.tenants = getScopedRecords(normalized.tenants, "tenants", session);
+  return normalized;
+}
+
+function getScopedRecords(records, collection, session) {
+  const list = Array.isArray(records) ? records : [];
+  if (!session) return [];
+  if (collection === "tenants") {
+    return session.isGlobalAdmin ? list : list.filter((record) => record.id === session.tenantId);
+  }
+  if (!tenantScopedCollections.has(collection) || session.isGlobalAdmin) {
+    return list;
+  }
+  return list.filter((record) => normalizeTenantId(record) === session.tenantId);
+}
+
+function canAccessRecord(record, collection, session) {
+  if (!record || !session) return false;
+  if (collection === "tenants") {
+    return session.isGlobalAdmin || record.id === session.tenantId;
+  }
+  if (!tenantScopedCollections.has(collection) || session.isGlobalAdmin) {
+    return true;
+  }
+  return normalizeTenantId(record) === session.tenantId;
+}
+
+function applyTenantToRecord(collection, record, session, data, previousRecord = null) {
+  const next = { ...(record || {}) };
+  if (collection === "tenants") {
+    return next;
+  }
+  if (tenantScopedCollections.has(collection)) {
+    const requestedTenantId = next.tenantId || next.tenant_id || previousRecord?.tenantId || previousRecord?.tenant_id;
+    next.tenantId = session?.isGlobalAdmin && requestedTenantId
+      ? requestedTenantId
+      : session?.tenantId || defaultTenantId;
+  }
+  if (collection === "users" && !next.tenantId) {
+    next.tenantId = defaultTenantId;
+  }
+  if (collection === "users" && session && !session.isGlobalAdmin) {
+    next.tenantId = session.tenantId;
+  }
+  if (collection !== "users" && !tenantExists(data, next.tenantId)) {
+    next.tenantId = session?.tenantId || defaultTenantId;
+  }
+  return next;
+}
+
+function normalizeTenantId(record) {
+  return record?.tenantId || record?.tenant_id || defaultTenantId;
+}
+
+function tenantExists(data, tenantId) {
+  if (!tenantId) return false;
+  return (Array.isArray(data?.tenants) ? data.tenants : []).some((tenant) => tenant.id === tenantId);
+}
+
+function getTenantForUser(data, user) {
+  const tenantId = normalizeTenantId(user);
+  const tenants = Array.isArray(data?.tenants) ? data.tenants : [];
+  return tenants.find((tenant) => tenant.id === tenantId) || {
+    id: defaultTenantId,
+    name: defaultTenantName,
+    document: "",
+    status: "ativo"
+  };
+}
+
+function isGlobalAdminUser(user) {
+  const email = String(user?.email || "").toLowerCase();
+  return user?.role === "admin" && globalAdminEmails.includes(email);
+}
+
 function prepareDatabasePayload(payload, currentData = {}) {
-  const nextPayload = { ...(payload || {}) };
+  const nextPayload = ensureTenantModel({ ...(payload || {}) });
   nextPayload.users = Array.isArray(nextPayload.users)
     ? nextPayload.users.map((user) => {
       const currentUser = findCurrentUser(currentData.users, user);
@@ -1086,7 +1282,14 @@ function createJsonDatabaseRepository(filePath) {
 function createPostgresDatabaseRepository() {
   return {
     source: "postgres",
+    _tenancyReady: false,
+    async ensureTenancy() {
+      if (this._tenancyReady) return;
+      await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresTenancyMigrationSql());
+      this._tenancyReady = true;
+    },
     async read() {
+      await this.ensureTenancy();
       const payload = await runPsql([
         "-t",
         "-A",
@@ -1100,26 +1303,34 @@ function createPostgresDatabaseRepository() {
       };
     },
     async write(payload) {
+      await this.ensureTenancy();
       await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresWriteSql(payload));
     },
     async saveSession(token, session) {
+      await this.ensureTenancy();
       await runPsql(["-v", "ON_ERROR_STOP=1"], `
-INSERT INTO user_sessions (id, user_id, token_hash, user_name, user_role, expires_at)
-VALUES (${sqlLiteral(createId())}, ${sqlLiteral(session.id)}, ${sqlLiteral(hashToken(token))}, ${sqlLiteral(session.name)}, ${sqlLiteral(session.role)}, ${sqlLiteral(session.expiresAt)}::timestamptz)
+INSERT INTO user_sessions (id, user_id, token_hash, user_name, user_email, user_role, tenant_id, tenant_name, is_global_admin, expires_at)
+VALUES (${sqlLiteral(createId())}, ${sqlLiteral(session.id)}, ${sqlLiteral(hashToken(token))}, ${sqlLiteral(session.name)}, ${sqlLiteral(session.email)}, ${sqlLiteral(session.role)}, ${sqlLiteral(session.tenantId)}, ${sqlLiteral(session.tenantName)}, ${session.isGlobalAdmin ? "TRUE" : "FALSE"}, ${sqlLiteral(session.expiresAt)}::timestamptz)
 ON CONFLICT (token_hash) DO UPDATE SET
   user_id = EXCLUDED.user_id,
   user_name = EXCLUDED.user_name,
+  user_email = EXCLUDED.user_email,
   user_role = EXCLUDED.user_role,
+  tenant_id = EXCLUDED.tenant_id,
+  tenant_name = EXCLUDED.tenant_name,
+  is_global_admin = EXCLUDED.is_global_admin,
   expires_at = EXCLUDED.expires_at;
 DELETE FROM user_sessions WHERE expires_at <= now();
 `);
     },
     async deleteSession(token) {
+      await this.ensureTenancy();
       await runPsql(["-v", "ON_ERROR_STOP=1"], `
 DELETE FROM user_sessions WHERE token_hash = ${sqlLiteral(hashToken(token))} OR expires_at <= now();
 `);
     },
     async findSessionByToken(token) {
+      await this.ensureTenancy();
       const output = await runPsql([
         "-t",
         "-A",
@@ -1130,7 +1341,11 @@ SELECT COALESCE((
   SELECT jsonb_build_object(
     'id', user_id,
     'name', user_name,
+    'email', user_email,
     'role', user_role,
+    'tenantId', tenant_id,
+    'tenantName', tenant_name,
+    'isGlobalAdmin', is_global_admin,
     'expiresAt', expires_at
   )::text
   FROM user_sessions
@@ -1188,10 +1403,90 @@ function runPsql(extraArgs, input = "") {
   });
 }
 
+function getPostgresTenancyMigrationSql() {
+  return `
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  document TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  status TEXT NOT NULL DEFAULT 'ativo',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO tenants (id, name, document, email, phone, status, notes)
+VALUES (${sqlLiteral(defaultTenantId)}, ${sqlLiteral(defaultTenantName)}, '00.000.000/0001-00', 'admin@santus.com', '', 'ativo', 'Empresa padrao criada para migrar os dados existentes.')
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE payables ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE receivables ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS user_email TEXT;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS tenant_name TEXT;
+ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS is_global_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE users SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE clients SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE suppliers SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE categories SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE payables SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE receivables SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE proposals SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE contracts SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE projects SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE tasks SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE audit_logs SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE user_sessions SET user_email = users.email
+FROM users
+WHERE user_sessions.user_id = users.id
+  AND (user_sessions.user_email IS NULL OR user_sessions.user_email = '');
+UPDATE user_sessions SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
+UPDATE user_sessions SET tenant_name = ${sqlLiteral(defaultTenantName)} WHERE tenant_name IS NULL OR tenant_name = '';
+
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_clients_tenant_status ON clients(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_suppliers_tenant_status ON suppliers(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_categories_tenant_type ON categories(tenant_id, type);
+CREATE INDEX IF NOT EXISTS idx_payables_tenant_status_due_date ON payables(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_receivables_tenant_status_due_date ON receivables(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_proposals_tenant_status_valid_until ON proposals(tenant_id, status, valid_until);
+CREATE INDEX IF NOT EXISTS idx_contracts_tenant_status_end_date ON contracts(tenant_id, status, end_date);
+CREATE INDEX IF NOT EXISTS idx_projects_tenant_status_due_date ON projects(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status_due_date ON tasks(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created_at ON audit_logs(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_tenant_id ON user_sessions(tenant_id);
+
+COMMIT;
+`;
+}
+
 function getPostgresReadSql() {
   return `
 SELECT jsonb_build_object(
   'session', NULL,
+  'tenants', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id', id,
+    'name', name,
+    'document', document,
+    'email', email,
+    'phone', phone,
+    'status', status,
+    'notes', notes
+  ) ORDER BY created_at) FROM tenants), '[]'::jsonb),
   'auditLogs', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
     'action', action,
@@ -1201,6 +1496,7 @@ SELECT jsonb_build_object(
     'actorId', actor_id,
     'actorName', actor_name,
     'actorRole', actor_role,
+    'tenantId', tenant_id,
     'changedFields', changed_fields,
     'deniedAction', denied_action,
     'deniedReason', denied_reason,
@@ -1219,10 +1515,12 @@ SELECT jsonb_build_object(
     'email', email,
     'passwordHash', password_hash,
     'role', role,
-    'status', status
+    'status', status,
+    'tenantId', tenant_id
   ) ORDER BY created_at) FROM users), '[]'::jsonb),
   'clients', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'type', type,
     'name', name,
     'document', document,
@@ -1233,6 +1531,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM clients), '[]'::jsonb),
   'suppliers', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'name', name,
     'document', document,
     'email', email,
@@ -1242,11 +1541,13 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM suppliers), '[]'::jsonb),
   'categories', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'name', name,
     'type', type
   ) ORDER BY created_at) FROM categories), '[]'::jsonb),
   'payables', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'supplierId', supplier_id,
     'category', category,
     'description', description,
@@ -1258,6 +1559,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM payables), '[]'::jsonb),
   'receivables', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'clientId', client_id,
     'proposalId', proposal_id,
     'category', category,
@@ -1270,6 +1572,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM receivables), '[]'::jsonb),
   'proposals', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'clientId', client_id,
     'title', title,
     'description', description,
@@ -1283,6 +1586,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM proposals), '[]'::jsonb),
   'contracts', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'clientId', client_id,
     'contractNumber', contract_number,
     'title', title,
@@ -1296,6 +1600,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM contracts), '[]'::jsonb),
   'projects', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'clientId', client_id,
     'name', name,
     'description', description,
@@ -1306,6 +1611,7 @@ SELECT jsonb_build_object(
   ) ORDER BY created_at) FROM projects), '[]'::jsonb),
   'tasks', COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', id,
+    'tenantId', tenant_id,
     'projectId', project_id,
     'title', title,
     'description', description,
@@ -1320,70 +1626,84 @@ SELECT jsonb_build_object(
 }
 
 function getPostgresWriteSql(payload) {
+  payload = ensureTenantModel(payload || {});
   const tag = `fenix_payload_${crypto.randomBytes(8).toString("hex")}`;
   return `
 BEGIN;
-TRUNCATE notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users;
+TRUNCATE notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO users (id, name, email, password_hash, role, status)
+INSERT INTO tenants (id, name, document, email, phone, status, notes)
+SELECT
+  record->>'id',
+  record->>'name',
+  record->>'document',
+  record->>'email',
+  record->>'phone',
+  record->>'status',
+  record->>'notes'
+FROM payload, jsonb_array_elements(COALESCE(data->'tenants', '[]'::jsonb)) AS record;
+
+WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
+INSERT INTO users (id, name, email, password_hash, role, status, tenant_id)
 SELECT
   record->>'id',
   record->>'name',
   lower(record->>'email'),
   COALESCE(NULLIF(record->>'passwordHash', ''), '${hashPassword("santus123")}'),
   record->>'role',
-  record->>'status'
+  record->>'status',
+  COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)})
 FROM payload, jsonb_array_elements(COALESCE(data->'users', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO clients (id, type, name, document, email, phone, status, notes)
-SELECT record->>'id', record->>'type', record->>'name', record->>'document', record->>'email', record->>'phone', record->>'status', record->>'notes'
+INSERT INTO clients (id, tenant_id, type, name, document, email, phone, status, notes)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), record->>'type', record->>'name', record->>'document', record->>'email', record->>'phone', record->>'status', record->>'notes'
 FROM payload, jsonb_array_elements(COALESCE(data->'clients', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO suppliers (id, name, document, email, phone, category, status)
-SELECT record->>'id', record->>'name', record->>'document', record->>'email', record->>'phone', record->>'category', record->>'status'
+INSERT INTO suppliers (id, tenant_id, name, document, email, phone, category, status)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), record->>'name', record->>'document', record->>'email', record->>'phone', record->>'category', record->>'status'
 FROM payload, jsonb_array_elements(COALESCE(data->'suppliers', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO categories (id, name, type)
-SELECT record->>'id', record->>'name', record->>'type'
+INSERT INTO categories (id, tenant_id, name, type)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), record->>'name', record->>'type'
 FROM payload, jsonb_array_elements(COALESCE(data->'categories', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO payables (id, supplier_id, category, description, amount, due_date, payment_date, status, notes)
-SELECT record->>'id', NULLIF(record->>'supplierId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'paymentDate', '')::date, record->>'status', record->>'notes'
+INSERT INTO payables (id, tenant_id, supplier_id, category, description, amount, due_date, payment_date, status, notes)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'supplierId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'paymentDate', '')::date, record->>'status', record->>'notes'
 FROM payload, jsonb_array_elements(COALESCE(data->'payables', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO proposals (id, client_id, title, description, amount, valid_until, status, responsible_id, sent_at, approved_at, notes)
-SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'title', record->>'description', (record->>'amount')::numeric, (record->>'validUntil')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'sentAt', '')::date, NULLIF(record->>'approvedAt', '')::date, record->>'notes'
+INSERT INTO proposals (id, tenant_id, client_id, title, description, amount, valid_until, status, responsible_id, sent_at, approved_at, notes)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'clientId', ''), record->>'title', record->>'description', (record->>'amount')::numeric, (record->>'validUntil')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'sentAt', '')::date, NULLIF(record->>'approvedAt', '')::date, record->>'notes'
 FROM payload, jsonb_array_elements(COALESCE(data->'proposals', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO receivables (id, client_id, proposal_id, category, description, amount, due_date, received_date, status, payment_method)
-SELECT record->>'id', NULLIF(record->>'clientId', ''), NULLIF(record->>'proposalId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'receivedDate', '')::date, record->>'status', record->>'paymentMethod'
+INSERT INTO receivables (id, tenant_id, client_id, proposal_id, category, description, amount, due_date, received_date, status, payment_method)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'clientId', ''), NULLIF(record->>'proposalId', ''), record->>'category', record->>'description', (record->>'amount')::numeric, (record->>'dueDate')::date, NULLIF(record->>'receivedDate', '')::date, record->>'status', record->>'paymentMethod'
 FROM payload, jsonb_array_elements(COALESCE(data->'receivables', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO contracts (id, client_id, contract_number, title, amount, start_date, end_date, status, responsible_id, signed_at, notes)
-SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'contractNumber', record->>'title', (record->>'amount')::numeric, (record->>'startDate')::date, (record->>'endDate')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'signedAt', '')::date, record->>'notes'
+INSERT INTO contracts (id, tenant_id, client_id, contract_number, title, amount, start_date, end_date, status, responsible_id, signed_at, notes)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'clientId', ''), record->>'contractNumber', record->>'title', (record->>'amount')::numeric, (record->>'startDate')::date, (record->>'endDate')::date, record->>'status', NULLIF(record->>'responsibleId', ''), NULLIF(record->>'signedAt', '')::date, record->>'notes'
 FROM payload, jsonb_array_elements(COALESCE(data->'contracts', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO projects (id, client_id, name, description, responsible_id, start_date, due_date, status)
-SELECT record->>'id', NULLIF(record->>'clientId', ''), record->>'name', record->>'description', NULLIF(record->>'responsibleId', ''), (record->>'startDate')::date, (record->>'dueDate')::date, record->>'status'
+INSERT INTO projects (id, tenant_id, client_id, name, description, responsible_id, start_date, due_date, status)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'clientId', ''), record->>'name', record->>'description', NULLIF(record->>'responsibleId', ''), (record->>'startDate')::date, (record->>'dueDate')::date, record->>'status'
 FROM payload, jsonb_array_elements(COALESCE(data->'projects', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO tasks (id, project_id, title, description, responsible_id, priority, status, due_date, completed_at)
-SELECT record->>'id', NULLIF(record->>'projectId', ''), record->>'title', record->>'description', NULLIF(record->>'responsibleId', ''), record->>'priority', record->>'status', (record->>'dueDate')::date, NULLIF(record->>'completedAt', '')::date
+INSERT INTO tasks (id, tenant_id, project_id, title, description, responsible_id, priority, status, due_date, completed_at)
+SELECT record->>'id', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), NULLIF(record->>'projectId', ''), record->>'title', record->>'description', NULLIF(record->>'responsibleId', ''), record->>'priority', record->>'status', (record->>'dueDate')::date, NULLIF(record->>'completedAt', '')::date
 FROM payload, jsonb_array_elements(COALESCE(data->'tasks', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
-INSERT INTO audit_logs (id, action, collection, record_id, record_label, actor_id, actor_name, actor_role, changed_fields, denied_action, denied_reason, metadata, created_at)
-SELECT record->>'id', record->>'action', record->>'collection', record->>'recordId', record->>'recordLabel', record->>'actorId', record->>'actorName', record->>'actorRole', COALESCE(record->'changedFields', '[]'::jsonb), record->>'deniedAction', record->>'deniedReason', COALESCE(record->'metadata', '{}'::jsonb), COALESCE(NULLIF(record->>'createdAt', '')::timestamptz, now())
+INSERT INTO audit_logs (id, action, collection, record_id, record_label, actor_id, actor_name, actor_role, tenant_id, changed_fields, denied_action, denied_reason, metadata, created_at)
+SELECT record->>'id', record->>'action', record->>'collection', record->>'recordId', record->>'recordLabel', record->>'actorId', record->>'actorName', record->>'actorRole', COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)}), COALESCE(record->'changedFields', '[]'::jsonb), record->>'deniedAction', record->>'deniedReason', COALESCE(record->'metadata', '{}'::jsonb), COALESCE(NULLIF(record->>'createdAt', '')::timestamptz, now())
 FROM payload, jsonb_array_elements(COALESCE(data->'auditLogs', '[]'::jsonb)) AS record;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)

@@ -13,6 +13,16 @@ const args = new Set(process.argv.slice(2));
 const shouldApply = args.has("--apply");
 const shouldApplySchema = args.has("--schema");
 const shouldDryRun = args.has("--dry-run") || !shouldApply;
+const defaultTenantId = "tenant_santus";
+const defaultTenant = {
+  id: defaultTenantId,
+  name: "SANTUS",
+  document: "00.000.000/0001-00",
+  email: "admin@santus.com",
+  phone: "",
+  status: "ativo",
+  notes: "Empresa padrao criada para migrar dados existentes."
+};
 
 if (args.has("--help")) {
   printHelp();
@@ -25,7 +35,7 @@ main().catch((error) => {
 });
 
 async function main() {
-  const data = await readJsonDatabase();
+  const data = ensureTenantModel(await readJsonDatabase());
   const summary = summarizeDatabase(data);
   printSummary(summary);
 
@@ -87,6 +97,7 @@ async function readJsonDatabase() {
 
 function summarizeDatabase(data) {
   return {
+    tenants: count(data.tenants),
     users: count(data.users),
     clients: count(data.clients),
     suppliers: count(data.suppliers),
@@ -125,6 +136,7 @@ function buildMigrationSql(data) {
   statements.push("BEGIN;");
   statements.push("SET CONSTRAINTS ALL DEFERRED;");
 
+  pushRows(statements, "tenants", data.tenants, mapTenant);
   pushRows(statements, "users", data.users, mapUser);
   pushRows(statements, "clients", data.clients, mapClient);
   pushRows(statements, "suppliers", data.suppliers, mapSupplier);
@@ -161,9 +173,35 @@ function pushNotificationReads(statements, data) {
   });
 }
 
+function ensureTenantModel(data) {
+  const next = data || {};
+  if (!Array.isArray(next.tenants)) {
+    next.tenants = [];
+  }
+  if (!next.tenants.some((tenant) => tenant.id === defaultTenantId)) {
+    next.tenants.unshift(defaultTenant);
+  }
+  ["users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks", "auditLogs"].forEach((collection) => {
+    if (!Array.isArray(next[collection])) {
+      next[collection] = [];
+    }
+    next[collection].forEach((record) => {
+      if (!record.tenantId && !record.tenant_id) {
+        record.tenantId = defaultTenantId;
+      }
+    });
+  });
+  return next;
+}
+
+function mapTenant(tenant) {
+  return pick(tenant, ["id", "name", "document", "email", "phone", "status", "notes"]);
+}
+
 function mapUser(user) {
   return {
     id: user.id,
+    tenant_id: tenantId(user),
     name: user.name,
     email: user.email,
     password_hash: user.passwordHash || hashPassword(user.password || ""),
@@ -173,20 +211,45 @@ function mapUser(user) {
 }
 
 function mapClient(client) {
-  return pick(client, ["id", "type", "name", "document", "email", "phone", "status", "notes"]);
+  return {
+    id: client.id,
+    tenant_id: tenantId(client),
+    type: client.type,
+    name: client.name,
+    document: client.document,
+    email: client.email,
+    phone: nullable(client.phone),
+    status: client.status,
+    notes: nullable(client.notes)
+  };
 }
 
 function mapSupplier(supplier) {
-  return pick(supplier, ["id", "name", "document", "email", "phone", "category", "status"]);
+  return {
+    id: supplier.id,
+    tenant_id: tenantId(supplier),
+    name: supplier.name,
+    document: supplier.document,
+    email: supplier.email,
+    phone: nullable(supplier.phone),
+    category: supplier.category,
+    status: supplier.status
+  };
 }
 
 function mapCategory(category) {
-  return pick(category, ["id", "name", "type"]);
+  return {
+    id: category.id,
+    tenant_id: tenantId(category),
+    name: category.name,
+    type: category.type
+  };
 }
 
 function mapPayable(payable) {
   return {
     id: payable.id,
+    tenant_id: tenantId(payable),
     supplier_id: nullable(payable.supplierId),
     category: payable.category,
     description: payable.description,
@@ -201,6 +264,7 @@ function mapPayable(payable) {
 function mapReceivable(receivable) {
   return {
     id: receivable.id,
+    tenant_id: tenantId(receivable),
     client_id: nullable(receivable.clientId),
     proposal_id: nullable(receivable.proposalId),
     category: receivable.category,
@@ -216,6 +280,7 @@ function mapReceivable(receivable) {
 function mapProposal(proposal) {
   return {
     id: proposal.id,
+    tenant_id: tenantId(proposal),
     client_id: nullable(proposal.clientId),
     title: proposal.title,
     description: nullable(proposal.description),
@@ -232,6 +297,7 @@ function mapProposal(proposal) {
 function mapContract(contract) {
   return {
     id: contract.id,
+    tenant_id: tenantId(contract),
     client_id: nullable(contract.clientId),
     contract_number: contract.contractNumber,
     title: contract.title,
@@ -248,6 +314,7 @@ function mapContract(contract) {
 function mapProject(project) {
   return {
     id: project.id,
+    tenant_id: tenantId(project),
     client_id: nullable(project.clientId),
     name: project.name,
     description: nullable(project.description),
@@ -261,6 +328,7 @@ function mapProject(project) {
 function mapTask(task) {
   return {
     id: task.id,
+    tenant_id: tenantId(task),
     project_id: nullable(task.projectId),
     title: task.title,
     description: nullable(task.description),
@@ -275,6 +343,7 @@ function mapTask(task) {
 function mapAuditLog(log) {
   return {
     id: log.id,
+    tenant_id: tenantId(log),
     action: log.action,
     collection: log.collection,
     record_id: nullable(log.recordId),
@@ -288,6 +357,10 @@ function mapAuditLog(log) {
     metadata: jsonValue(log.metadata || {}),
     created_at: nullable(log.createdAt)
   };
+}
+
+function tenantId(record) {
+  return record?.tenantId || record?.tenant_id || defaultTenantId;
 }
 
 function pick(source, keys) {

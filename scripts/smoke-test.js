@@ -45,6 +45,7 @@ async function main() {
   assert(/httponly/i.test(setCookieHeader), "Cookie de sessao nao possui HttpOnly.");
   assert(/samesite=lax/i.test(setCookieHeader), "Cookie de sessao nao possui SameSite=Lax.");
   assert(login.user?.email === "admin@santus.com", "Login retornou usuario inesperado.");
+  assert(login.tenant?.id, "Login nao retornou empresa da sessao.");
 
   const headers = { Cookie: sessionCookie };
   const health = await request("/api/health", { headers });
@@ -52,6 +53,7 @@ async function main() {
   assert(health.databaseInitialized === true, "Banco nao esta inicializado.");
 
   const bootstrap = await request("/api/bootstrap", { headers });
+  assert(Array.isArray(bootstrap.tenants) && bootstrap.tenants.length > 0, "Bootstrap nao retornou empresas.");
   assert(Array.isArray(bootstrap.users) && bootstrap.users.length > 0, "Bootstrap nao retornou usuarios.");
   assert(Array.isArray(bootstrap.clients), "Bootstrap nao retornou clientes.");
 
@@ -93,6 +95,70 @@ async function main() {
 
   const reads = await request("/api/notification-reads", { headers });
   assert(Array.isArray(reads), "Notificacoes lidas nao retornaram lista.");
+
+  const tenantSuffix = Date.now();
+  const temporaryTenant = await request("/api/tenants", {
+    method: "POST",
+    headers,
+    body: {
+      name: `Empresa Smoke ${tenantSuffix}`,
+      document: `SMOKE-${tenantSuffix}`,
+      email: `empresa-smoke-${tenantSuffix}@teste.com`,
+      phone: "",
+      status: "ativo",
+      notes: "Empresa temporaria criada pelo smoke test."
+    }
+  });
+  assert(temporaryTenant.id, "Empresa temporaria nao foi criada.");
+
+  const tenantAdminPassword = `Smoke${tenantSuffix}!`;
+  const temporaryUser = await request("/api/users", {
+    method: "POST",
+    headers,
+    body: {
+      tenantId: temporaryTenant.id,
+      name: `Admin Smoke ${tenantSuffix}`,
+      email: `admin-smoke-${tenantSuffix}@teste.com`,
+      password: tenantAdminPassword,
+      role: "admin",
+      status: "ativo"
+    }
+  });
+  assert(temporaryUser.id, "Usuario temporario multiempresa nao foi criado.");
+
+  const tenantLoginResponse = await rawRequest("/api/auth/login", {
+    method: "POST",
+    body: {
+      email: temporaryUser.email,
+      password: tenantAdminPassword
+    }
+  });
+  const tenantCookie = extractCookie(tenantLoginResponse.headers.get("set-cookie"), "santuserp_session");
+  const tenantHeaders = { Cookie: tenantCookie };
+  const tenantBootstrap = await request("/api/bootstrap", { headers: tenantHeaders });
+  assert(tenantBootstrap.tenants.length === 1 && tenantBootstrap.tenants[0].id === temporaryTenant.id, "Tenant admin enxergou empresa indevida.");
+  assert(tenantBootstrap.clients.length === 0, "Tenant admin enxergou clientes de outra empresa.");
+
+  const tenantClient = await request("/api/clients", {
+    method: "POST",
+    headers: tenantHeaders,
+    body: {
+      type: "PJ",
+      name: `Cliente Tenant Smoke ${tenantSuffix}`,
+      document: `TENANT-${tenantSuffix}`,
+      email: `cliente-tenant-smoke-${tenantSuffix}@teste.com`,
+      phone: "",
+      status: "prospect",
+      notes: "Cliente temporario criado em tenant isolado."
+    }
+  });
+  assert(tenantClient.tenantId === temporaryTenant.id, "Cliente temporario nao recebeu tenant correto.");
+  const isolatedClients = await request("/api/clients", { headers: tenantHeaders });
+  assert(isolatedClients.length === 1 && isolatedClients[0].id === tenantClient.id, "Lista do tenant nao ficou isolada.");
+
+  await request(`/api/clients/${tenantClient.id}`, { method: "DELETE", headers });
+  await request(`/api/users/${temporaryUser.id}`, { method: "DELETE", headers });
+  await request(`/api/tenants/${temporaryTenant.id}`, { method: "DELETE", headers });
 
   console.log("Smoke test concluido com sucesso.");
   console.log(`API: ${baseUrl}`);

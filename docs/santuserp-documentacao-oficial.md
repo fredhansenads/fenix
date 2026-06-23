@@ -6,6 +6,8 @@ O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao 
 
 O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local e painel de saude do sistema.
 
+A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
+
 ## 2. Objetivos do sistema
 
 - Centralizar dados internos da SANTUS.
@@ -96,6 +98,7 @@ backups/*.dump
 - Notificacoes internas.
 - Automacoes iniciais.
 - Historico de atividades.
+- Empresas e isolamento multiempresa.
 - Configuracoes administrativas.
 - Saude do sistema.
 
@@ -257,6 +260,7 @@ docs/postgres-schema.sql
 
 Tabelas principais:
 
+- `tenants`
 - `users`
 - `clients`
 - `suppliers`
@@ -270,6 +274,8 @@ Tabelas principais:
 - `audit_logs`
 - `notification_reads`
 - `user_sessions`
+
+O servidor aplica uma migracao idempotente para adicionar `tenants`, `tenant_id` e campos de sessao multiempresa em bancos locais antigos. Dados existentes sao vinculados automaticamente a empresa padrao SANTUS.
 
 O arquivo `.env` local deve seguir o modelo de `.env.example`. Credenciais reais nao devem ser commitadas.
 
@@ -582,6 +588,7 @@ Fase 2 concluida no escopo planejado:
 - Empacotamento local inicial com `package.json`, atalhos `npm`, inicializador PowerShell e guia de ambiente.
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
+- Modelo multiempresa/multicliente com empresas, `tenant_id`, usuarios vinculados por empresa e isolamento nas rotas principais.
 
 ## 21. Status da Fase 3
 
@@ -596,8 +603,9 @@ Fase 3 iniciada:
 
 ## 22. Proximas etapas recomendadas
 
-1. Expandir automacoes com regras configuraveis.
-2. Iniciar assistente de IA para analise executiva.
+1. Criar migrations formais e versionadas para o PostgreSQL.
+2. Expandir automacoes com regras configuraveis.
+3. Iniciar assistente de IA para analise executiva.
 
 ## 23. Criterios de sucesso
 
