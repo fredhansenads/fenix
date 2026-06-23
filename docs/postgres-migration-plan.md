@@ -11,6 +11,8 @@ Status em maio de 2026:
 - Backend alterna automaticamente entre PostgreSQL e JSON conforme `.env`.
 - `.env.example` documenta as variaveis esperadas.
 - `scripts/migrate-json-to-postgres.js` existe para migracao assistida a partir de JSON.
+- `scripts/apply-postgres-migrations.js` aplica migrations PostgreSQL versionadas.
+- Tabela `schema_migrations` registra versao, nome, checksum e data de aplicacao.
 - `scripts/seed-postgres-demo.js` existe para popular dados demonstrativos completos.
 - `scripts/backup-postgres.js` gera backups SQL locais.
 - `scripts/restore-postgres.js` lista backups, simula restauracao e restaura com confirmacao explicita.
@@ -33,7 +35,7 @@ O JSON continua existindo como fallback tecnico, mas a persistencia local princi
 
 ## Ordem recomendada
 
-1. Criar banco PostgreSQL e aplicar `docs/postgres-schema.sql`.
+1. Criar banco PostgreSQL e aplicar migrations com `node scripts/apply-postgres-migrations.js --apply`.
 2. Fazer backup do arquivo `data/fenix-db.json`.
 3. Rodar um script de leitura do JSON e carga nas tabelas PostgreSQL.
 4. Validar contagens por tabela.
@@ -47,19 +49,20 @@ O JSON continua existindo como fallback tecnico, mas a persistencia local princi
 
 A carga deve respeitar dependencias entre tabelas:
 
-1. `users`
-2. `clients`
-3. `suppliers`
-4. `categories`
-5. `proposals`
-6. `contracts`
-7. `projects`
-8. `tasks`
-9. `payables`
-10. `receivables`
-11. `audit_logs`
-12. `notification_reads`
-13. `user_sessions`
+1. `tenants`
+2. `users`
+3. `clients`
+4. `suppliers`
+5. `categories`
+6. `proposals`
+7. `contracts`
+8. `projects`
+9. `tasks`
+10. `payables`
+11. `receivables`
+12. `audit_logs`
+13. `notification_reads`
+14. `user_sessions`
 
 `receivables` deve entrar depois de `proposals`, porque pode referenciar `proposal_id`.
 
@@ -67,6 +70,7 @@ A carga deve respeitar dependencias entre tabelas:
 
 | JSON | PostgreSQL | Observacao |
 | --- | --- | --- |
+| `tenants` | `tenants` | Quando nao existir no JSON, a empresa padrao SANTUS e criada. |
 | `users` | `users` | `passwordHash` vira `password_hash`; `password` legado deve virar hash antes da carga. |
 | `clients` | `clients` | Campos sao praticamente diretos. |
 | `suppliers` | `suppliers` | Campos sao praticamente diretos. |
@@ -130,6 +134,7 @@ A carga deve respeitar dependencias entre tabelas:
 - Confirmar que senhas nao aparecem em nenhuma resposta publica da API.
 - Rodar `node scripts/smoke-test.js`.
 - Rodar `node scripts/ops-check.js`.
+- Rodar `node scripts/apply-postgres-migrations.js --list`.
 
 ## Estrategia de rollback
 
@@ -141,9 +146,11 @@ A carga deve respeitar dependencias entre tabelas:
 
 O script de restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. A restauracao limpa o schema `public`, portanto deve ser usada apenas quando a substituicao do banco atual for desejada.
 
+Rollback de migrations estruturais deve priorizar restauracao de backup. Migrations que alteram ou redistribuem dados, como multiempresa, nao devem ter rollback destrutivo automatico sem aprovacao operacional explicita.
+
 ## Proximo passo tecnico
 
-Evoluir a persistencia PostgreSQL para reduzir a dependencia do endpoint `/api/state` e aproximar a API do modelo modular definitivo. O script `scripts/migrate-json-to-postgres.js` ja foi criado para:
+Evoluir ambientes de deploy/homologacao/producao e manter toda alteracao estrutural futura em `migrations/`. O script `scripts/migrate-json-to-postgres.js` ja foi criado para:
 
 - Leia `data/fenix-db.json`.
 - Valide colecoes esperadas.
@@ -152,7 +159,7 @@ Evoluir a persistencia PostgreSQL para reduzir a dependencia do endpoint `/api/s
 - Insira dados respeitando a ordem de carga.
 - Emita um resumo final com contagens e inconsistencias.
 
-Status: script inicial criado. Seed demonstrativo PostgreSQL tambem disponivel em `scripts/seed-postgres-demo.js`.
+Status: script inicial criado. Seed demonstrativo PostgreSQL tambem disponivel em `scripts/seed-postgres-demo.js`. Migrations formais disponiveis em `migrations/`.
 
 ## Como executar o script inicial
 

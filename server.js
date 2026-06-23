@@ -4,6 +4,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
 const { spawn } = require("child_process");
+const { applyPostgresMigrations } = require("./scripts/postgres-migrations");
 
 const root = __dirname;
 loadEnvFile(path.join(root, ".env"));
@@ -1282,14 +1283,18 @@ function createJsonDatabaseRepository(filePath) {
 function createPostgresDatabaseRepository() {
   return {
     source: "postgres",
-    _tenancyReady: false,
-    async ensureTenancy() {
-      if (this._tenancyReady) return;
-      await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresTenancyMigrationSql());
-      this._tenancyReady = true;
+    _migrationsReady: false,
+    async ensureMigrations() {
+      if (this._migrationsReady) return;
+      await applyPostgresMigrations({
+        root,
+        runSql: (sql) => runPsql(["-v", "ON_ERROR_STOP=1"], sql),
+        logger: null
+      });
+      this._migrationsReady = true;
     },
     async read() {
-      await this.ensureTenancy();
+      await this.ensureMigrations();
       const payload = await runPsql([
         "-t",
         "-A",
@@ -1303,11 +1308,11 @@ function createPostgresDatabaseRepository() {
       };
     },
     async write(payload) {
-      await this.ensureTenancy();
+      await this.ensureMigrations();
       await runPsql(["-v", "ON_ERROR_STOP=1"], getPostgresWriteSql(payload));
     },
     async saveSession(token, session) {
-      await this.ensureTenancy();
+      await this.ensureMigrations();
       await runPsql(["-v", "ON_ERROR_STOP=1"], `
 INSERT INTO user_sessions (id, user_id, token_hash, user_name, user_email, user_role, tenant_id, tenant_name, is_global_admin, expires_at)
 VALUES (${sqlLiteral(createId())}, ${sqlLiteral(session.id)}, ${sqlLiteral(hashToken(token))}, ${sqlLiteral(session.name)}, ${sqlLiteral(session.email)}, ${sqlLiteral(session.role)}, ${sqlLiteral(session.tenantId)}, ${sqlLiteral(session.tenantName)}, ${session.isGlobalAdmin ? "TRUE" : "FALSE"}, ${sqlLiteral(session.expiresAt)}::timestamptz)
@@ -1324,13 +1329,13 @@ DELETE FROM user_sessions WHERE expires_at <= now();
 `);
     },
     async deleteSession(token) {
-      await this.ensureTenancy();
+      await this.ensureMigrations();
       await runPsql(["-v", "ON_ERROR_STOP=1"], `
 DELETE FROM user_sessions WHERE token_hash = ${sqlLiteral(hashToken(token))} OR expires_at <= now();
 `);
     },
     async findSessionByToken(token) {
-      await this.ensureTenancy();
+      await this.ensureMigrations();
       const output = await runPsql([
         "-t",
         "-A",
@@ -1401,77 +1406,6 @@ function runPsql(extraArgs, input = "") {
     }
     child.stdin.end();
   });
-}
-
-function getPostgresTenancyMigrationSql() {
-  return `
-BEGIN;
-
-CREATE TABLE IF NOT EXISTS tenants (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  document TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
-  status TEXT NOT NULL DEFAULT 'ativo',
-  notes TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-INSERT INTO tenants (id, name, document, email, phone, status, notes)
-VALUES (${sqlLiteral(defaultTenantId)}, ${sqlLiteral(defaultTenantName)}, '00.000.000/0001-00', 'admin@santus.com', '', 'ativo', 'Empresa padrao criada para migrar os dados existentes.')
-ON CONFLICT (id) DO NOTHING;
-
-ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE categories ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE payables ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE receivables ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE proposals ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE contracts ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS user_email TEXT;
-ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS tenant_id TEXT;
-ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS tenant_name TEXT;
-ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS is_global_admin BOOLEAN NOT NULL DEFAULT FALSE;
-
-UPDATE users SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE clients SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE suppliers SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE categories SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE payables SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE receivables SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE proposals SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE contracts SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE projects SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE tasks SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE audit_logs SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE user_sessions SET user_email = users.email
-FROM users
-WHERE user_sessions.user_id = users.id
-  AND (user_sessions.user_email IS NULL OR user_sessions.user_email = '');
-UPDATE user_sessions SET tenant_id = ${sqlLiteral(defaultTenantId)} WHERE tenant_id IS NULL OR tenant_id = '';
-UPDATE user_sessions SET tenant_name = ${sqlLiteral(defaultTenantName)} WHERE tenant_name IS NULL OR tenant_name = '';
-
-CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_clients_tenant_status ON clients(tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_suppliers_tenant_status ON suppliers(tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_categories_tenant_type ON categories(tenant_id, type);
-CREATE INDEX IF NOT EXISTS idx_payables_tenant_status_due_date ON payables(tenant_id, status, due_date);
-CREATE INDEX IF NOT EXISTS idx_receivables_tenant_status_due_date ON receivables(tenant_id, status, due_date);
-CREATE INDEX IF NOT EXISTS idx_proposals_tenant_status_valid_until ON proposals(tenant_id, status, valid_until);
-CREATE INDEX IF NOT EXISTS idx_contracts_tenant_status_end_date ON contracts(tenant_id, status, end_date);
-CREATE INDEX IF NOT EXISTS idx_projects_tenant_status_due_date ON projects(tenant_id, status, due_date);
-CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status_due_date ON tasks(tenant_id, status, due_date);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created_at ON audit_logs(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_tenant_id ON user_sessions(tenant_id);
-
-COMMIT;
-`;
 }
 
 function getPostgresReadSql() {

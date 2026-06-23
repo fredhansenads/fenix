@@ -4,10 +4,10 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const crypto = require("crypto");
+const { applyPostgresMigrations } = require("./postgres-migrations");
 
 const root = path.resolve(__dirname, "..");
 const databaseFile = path.join(root, "data", "fenix-db.json");
-const schemaFile = path.join(root, "docs", "postgres-schema.sql");
 
 const args = new Set(process.argv.slice(2));
 const shouldApply = args.has("--apply");
@@ -56,7 +56,7 @@ async function main() {
 
   try {
     if (shouldApplySchema) {
-      runPsqlFile(schemaFile);
+      await applyPostgresMigrations({ root, runSql });
     }
     runPsqlFile(migrationFile);
     console.log("\nMigracao aplicada com sucesso.");
@@ -84,6 +84,9 @@ Alternativa:
 
 Windows:
   PSQL_PATH=C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe
+
+Observacao:
+  --schema aplica as migrations versionadas antes da carga do JSON.
 `);
 }
 
@@ -418,6 +421,31 @@ function runPsqlFile(filePath) {
   if (result.status !== 0) {
     throw new Error(`psql falhou ao executar ${filePath}`);
   }
+}
+
+function runSql(sql) {
+  const args = ["-X", "-q", "-v", "ON_ERROR_STOP=1"];
+  if (process.env.DATABASE_URL) {
+    args.push(process.env.DATABASE_URL);
+  } else {
+    args.push(
+      "-h", process.env.PGHOST || "localhost",
+      "-p", process.env.PGPORT || "5432",
+      "-U", process.env.PGUSER || "postgres",
+      "-d", process.env.PGDATABASE || "fenix"
+    );
+  }
+  const result = spawnSync(resolvePsqlCommand(), args, {
+    input: sql,
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: false,
+    env: process.env,
+    encoding: "utf-8"
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || "psql falhou.");
+  }
+  return result.stdout || "";
 }
 
 function resolvePsqlCommand() {

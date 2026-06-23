@@ -1,14 +1,6 @@
--- SantusERP - schema PostgreSQL inicial
--- Objetivo: mapear o modelo atual do MVP para uma futura migracao do JSON local.
+BEGIN;
 
-CREATE TABLE schema_migrations (
-  version TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  checksum TEXT NOT NULL,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   document TEXT NOT NULL,
@@ -20,9 +12,9 @@ CREATE TABLE tenants (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
@@ -32,9 +24,9 @@ CREATE TABLE users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   type TEXT NOT NULL CHECK (type IN ('PJ', 'PF')),
   name TEXT NOT NULL,
   document TEXT NOT NULL,
@@ -46,9 +38,9 @@ CREATE TABLE clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE suppliers (
+CREATE TABLE IF NOT EXISTS suppliers (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   name TEXT NOT NULL,
   document TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -59,18 +51,18 @@ CREATE TABLE suppliers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('receita', 'despesa')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE payables (
+CREATE TABLE IF NOT EXISTS payables (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   supplier_id TEXT REFERENCES suppliers(id) ON DELETE SET NULL,
   category TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -83,9 +75,9 @@ CREATE TABLE payables (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE receivables (
+CREATE TABLE IF NOT EXISTS receivables (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
   proposal_id TEXT,
   category TEXT NOT NULL,
@@ -99,9 +91,9 @@ CREATE TABLE receivables (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE proposals (
+CREATE TABLE IF NOT EXISTS proposals (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -116,13 +108,22 @@ CREATE TABLE proposals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE receivables
-  ADD CONSTRAINT receivables_proposal_id_fkey
-  FOREIGN KEY (proposal_id) REFERENCES proposals(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'receivables_proposal_id_fkey'
+      AND table_name = 'receivables'
+  ) THEN
+    ALTER TABLE receivables
+      ADD CONSTRAINT receivables_proposal_id_fkey
+      FOREIGN KEY (proposal_id) REFERENCES proposals(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
   contract_number TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
@@ -137,9 +138,9 @@ CREATE TABLE contracts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE projects (
+CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   description TEXT,
@@ -151,9 +152,9 @@ CREATE TABLE projects (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -166,9 +167,9 @@ CREATE TABLE tasks (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE RESTRICT,
   action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'denied')),
   collection TEXT NOT NULL,
   record_id TEXT,
@@ -183,7 +184,7 @@ CREATE TABLE audit_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE notification_reads (
+CREATE TABLE IF NOT EXISTS notification_reads (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
   notification_id TEXT NOT NULL,
@@ -191,38 +192,40 @@ CREATE TABLE notification_reads (
   UNIQUE (user_id, notification_id)
 );
 
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   token_hash TEXT NOT NULL UNIQUE,
   user_name TEXT NOT NULL,
   user_email TEXT,
   user_role TEXT NOT NULL,
-  tenant_id TEXT NOT NULL,
-  tenant_name TEXT NOT NULL,
+  tenant_id TEXT,
+  tenant_name TEXT,
   is_global_admin BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_users_tenant_id ON users(tenant_id);
-CREATE INDEX idx_clients_status ON clients(status);
-CREATE INDEX idx_clients_tenant_status ON clients(tenant_id, status);
-CREATE INDEX idx_payables_status_due_date ON payables(status, due_date);
-CREATE INDEX idx_payables_tenant_status_due_date ON payables(tenant_id, status, due_date);
-CREATE INDEX idx_receivables_status_due_date ON receivables(status, due_date);
-CREATE INDEX idx_receivables_tenant_status_due_date ON receivables(tenant_id, status, due_date);
-CREATE INDEX idx_proposals_status_valid_until ON proposals(status, valid_until);
-CREATE INDEX idx_proposals_tenant_status_valid_until ON proposals(tenant_id, status, valid_until);
-CREATE INDEX idx_contracts_status_end_date ON contracts(status, end_date);
-CREATE INDEX idx_contracts_tenant_status_end_date ON contracts(tenant_id, status, end_date);
-CREATE INDEX idx_projects_status_due_date ON projects(status, due_date);
-CREATE INDEX idx_projects_tenant_status_due_date ON projects(tenant_id, status, due_date);
-CREATE INDEX idx_tasks_status_due_date ON tasks(status, due_date);
-CREATE INDEX idx_tasks_tenant_status_due_date ON tasks(tenant_id, status, due_date);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
-CREATE INDEX idx_audit_logs_collection_action ON audit_logs(collection, action);
-CREATE INDEX idx_audit_logs_tenant_created_at ON audit_logs(tenant_id, created_at DESC);
-CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
-CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
-CREATE INDEX idx_user_sessions_tenant_id ON user_sessions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
+CREATE INDEX IF NOT EXISTS idx_clients_tenant_status ON clients(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_payables_status_due_date ON payables(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_payables_tenant_status_due_date ON payables(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_receivables_status_due_date ON receivables(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_receivables_tenant_status_due_date ON receivables(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_proposals_status_valid_until ON proposals(status, valid_until);
+CREATE INDEX IF NOT EXISTS idx_proposals_tenant_status_valid_until ON proposals(tenant_id, status, valid_until);
+CREATE INDEX IF NOT EXISTS idx_contracts_status_end_date ON contracts(status, end_date);
+CREATE INDEX IF NOT EXISTS idx_contracts_tenant_status_end_date ON contracts(tenant_id, status, end_date);
+CREATE INDEX IF NOT EXISTS idx_projects_status_due_date ON projects(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_projects_tenant_status_due_date ON projects(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_due_date ON tasks(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status_due_date ON tasks(tenant_id, status, due_date);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_collection_action ON audit_logs(collection, action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_created_at ON audit_logs(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_tenant_id ON user_sessions(tenant_id);
+
+COMMIT;

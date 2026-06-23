@@ -69,7 +69,15 @@ O backend concentra leitura e escrita em uma camada simples de repositorio. Essa
 
 O arquivo `docs/postgres-schema.sql` contem o schema PostgreSQL inicial, cobrindo os modulos atuais, empresas/tenants, relacionamentos, restricoes, auditoria e notificacoes lidas.
 
-O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback para a futura migracao.
+As migrations versionadas ficam em `migrations/` e sao registradas na tabela `schema_migrations`. O servidor aplica migrations pendentes automaticamente ao iniciar com PostgreSQL, e o comando manual tambem esta disponivel:
+
+```bash
+node scripts/apply-postgres-migrations.js --list
+node scripts/apply-postgres-migrations.js --dry-run
+node scripts/apply-postgres-migrations.js --apply
+```
+
+O arquivo `docs/postgres-migration-plan.md` descreve a ordem de carga, o mapeamento JSON para tabelas, validacoes e estrategia de rollback.
 
 O script `scripts/migrate-json-to-postgres.js` faz a migracao assistida do JSON para PostgreSQL usando o cliente `psql`.
 
@@ -135,6 +143,9 @@ Atalhos equivalentes tambem estao disponiveis via `npm`:
 npm start
 npm run check
 npm run check:full
+npm run migrate:list
+npm run migrate:dry
+npm run migrate:apply
 npm run backup
 ```
 
@@ -239,4 +250,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e criar migrations formais para versionar alteracoes estruturais do banco, comecando pela migracao multiempresa ja aplicada de forma idempotente pelo servidor.
+A proxima etapa recomendada e preparar deploy, homologacao e producao com variaveis de ambiente separadas, HTTPS, processo de start/restart e checklist de release.

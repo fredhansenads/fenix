@@ -9,6 +9,7 @@ Status geral atual:
 - Fase 3 iniciada com automacoes iniciais.
 - Etapa 1 deste roadmap ja iniciada/concluida: sessoes fortalecidas com cookie `HttpOnly`, `SameSite=Lax`, limite basico de login e remocao do token puro do `localStorage`.
 - Etapa 2 deste roadmap concluida: modelo multiempresa/multicliente com empresas, `tenant_id`, vinculo de usuarios e isolamento por sessao nas rotas principais.
+- Etapa 3 deste roadmap concluida: migrations PostgreSQL versionadas, tabela `schema_migrations`, comandos de aplicacao/listagem/dry-run e aplicacao automatica pelo servidor.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -83,19 +84,19 @@ Transformar o schema atual em estrutura evolutiva e segura para producao.
 
 Entregas principais:
 
-- Sistema formal de migrations.
-- Versionamento do schema.
-- Script para aplicar migrations.
-- Script para rollback quando viavel.
-- Seeds separados entre demo, desenvolvimento e producao.
-- Remocao de recriacao destrutiva em rotinas produtivas.
-- Indices para campos mais usados em filtros e relatorios.
+- Sistema formal de migrations. Concluido.
+- Versionamento do schema. Concluido com tabela `schema_migrations`.
+- Script para aplicar migrations. Concluido.
+- Script para rollback quando viavel. Definido como restauracao via backup para migrations destrutivas ou nao reversiveis.
+- Seeds separados entre demo, desenvolvimento e producao. Demo mantido e integrado as migrations; seeds de homologacao/producao devem ficar vazios/controlados.
+- Remocao de recriacao destrutiva em rotinas produtivas. Migrations nao truncam dados; seed demo continua sendo rotina explicita de demonstracao.
+- Indices para campos mais usados em filtros e relatorios. Concluido nas migrations iniciais.
 
 Criterio de conclusao:
 
-- Toda alteracao estrutural do banco passa por migration.
-- Ambiente novo pode ser montado do zero.
-- Ambiente existente pode ser atualizado sem perda de dados.
+- Toda alteracao estrutural do banco passa por migration. Implementado como padrao.
+- Ambiente novo pode ser montado do zero. Implementado via `001_initial_schema`.
+- Ambiente existente pode ser atualizado sem perda de dados. Implementado por migrations idempotentes.
 
 ## 4. Preparar deploy e ambientes
 
@@ -275,7 +276,7 @@ Criterio de conclusao:
 
 1. Finalizar refinamentos da autenticacao.
 2. Implementar multiempresa/multicliente. Concluido.
-3. Criar migrations formais.
+3. Criar migrations formais. Concluido.
 4. Preparar deploy/homologacao/producao.
 5. Reforcar compliance e auditoria.
 6. Melhorar UX/onboarding.
@@ -286,12 +287,12 @@ Criterio de conclusao:
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 3 - banco de dados e migrations**, porque o sistema ja recebeu alteracoes estruturais relevantes e precisa de um fluxo formal para evoluir schema sem risco operacional.
+A proxima etapa mais importante e a **Etapa 4 - deploy e ambientes**, porque o banco ja possui caminho formal de evolucao e agora o sistema precisa separar desenvolvimento, homologacao e producao.
 
-Primeira entrega sugerida da Etapa 3:
+Primeira entrega sugerida da Etapa 4:
 
-- Criar pasta de migrations versionadas.
-- Registrar migrations aplicadas no banco.
-- Transformar a migracao multiempresa atual em migration formal.
-- Documentar comando padrao para aplicar migrations em ambiente local, homologacao e producao.
+- Definir variaveis de ambiente por ambiente.
+- Preparar `NODE_ENV=production` e cookies seguros.
+- Documentar start, stop, restart e release.
+- Planejar HTTPS, dominio e backup antes do deploy.
 

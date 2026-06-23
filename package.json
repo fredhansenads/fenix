@@ -8,6 +8,9 @@
     "check": "node scripts/ops-check.js",
     "check:full": "node scripts/ops-check.js --with-smoke",
     "smoke": "node scripts/smoke-test.js",
+    "migrate:list": "node scripts/apply-postgres-migrations.js --list",
+    "migrate:dry": "node scripts/apply-postgres-migrations.js --dry-run",
+    "migrate:apply": "node scripts/apply-postgres-migrations.js --apply",
     "backup": "node scripts/backup-postgres.js",
     "restore:list": "node scripts/restore-postgres.js --list",
     "seed:demo": "node scripts/seed-postgres-demo.js"

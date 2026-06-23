@@ -58,6 +58,7 @@ package.json                       Atalhos npm para operacao local
 .env.example                       Exemplo de configuracao local
 docs/postgres-schema.sql           Schema PostgreSQL
 docs/postgres-migration-plan.md    Plano tecnico de migracao
+scripts/apply-postgres-migrations.js Migrations PostgreSQL
 docs/santuserp-checklist-operacional.md Checklist operacional local
 docs/santuserp-ambiente-local.md       Guia de ambiente local
 docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
@@ -260,6 +261,7 @@ docs/postgres-schema.sql
 
 Tabelas principais:
 
+- `schema_migrations`
 - `tenants`
 - `users`
 - `clients`
@@ -276,6 +278,28 @@ Tabelas principais:
 - `user_sessions`
 
 O servidor aplica uma migracao idempotente para adicionar `tenants`, `tenant_id` e campos de sessao multiempresa em bancos locais antigos. Dados existentes sao vinculados automaticamente a empresa padrao SANTUS.
+
+As migrations versionadas ficam em:
+
+```text
+migrations/
+```
+
+Elas sao registradas no banco pela tabela:
+
+```text
+schema_migrations
+```
+
+Comandos principais:
+
+```powershell
+node scripts\apply-postgres-migrations.js --list
+node scripts\apply-postgres-migrations.js --dry-run
+node scripts\apply-postgres-migrations.js --apply
+```
+
+O servidor tambem aplica migrations pendentes automaticamente antes de ler ou gravar no PostgreSQL.
 
 O arquivo `.env` local deve seguir o modelo de `.env.example`. Credenciais reais nao devem ser commitadas.
 
@@ -589,6 +613,7 @@ Fase 2 concluida no escopo planejado:
 - Smoke test automatizado.
 - Checklist operacional manual e automatizado.
 - Modelo multiempresa/multicliente com empresas, `tenant_id`, usuarios vinculados por empresa e isolamento nas rotas principais.
+- Migrations PostgreSQL versionadas com tabela `schema_migrations`, comando manual e aplicacao automatica pelo servidor.
 
 ## 21. Status da Fase 3
 
@@ -603,7 +628,7 @@ Fase 3 iniciada:
 
 ## 22. Proximas etapas recomendadas
 
-1. Criar migrations formais e versionadas para o PostgreSQL.
+1. Preparar deploy, homologacao e producao.
 2. Expandir automacoes com regras configuraveis.
 3. Iniciar assistente de IA para analise executiva.
 

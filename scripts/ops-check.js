@@ -78,6 +78,7 @@ function checkCommand(label, command, args) {
 
 function checkDatabase() {
   const expectedTables = [
+    "schema_migrations",
     "tenants",
     "users",
     "clients",
@@ -115,6 +116,7 @@ ORDER BY table_name;
   const counts = runPsql(`
 SELECT 'users=' || count(*) FROM users
 UNION ALL SELECT 'tenants=' || count(*) FROM tenants
+UNION ALL SELECT 'migrations=' || count(*) FROM schema_migrations
 UNION ALL SELECT 'clients=' || count(*) FROM clients
 UNION ALL SELECT 'audit_logs=' || count(*) FROM audit_logs;
 `);
@@ -152,6 +154,8 @@ function checkScripts() {
     "backup-postgres.js",
     "restore-postgres.js",
     "seed-postgres-demo.js",
+    "apply-postgres-migrations.js",
+    "postgres-migrations.js",
     "smoke-test.js"
   ];
   const missing = requiredScripts.filter((script) => !fs.existsSync(path.join(root, "scripts", script)));

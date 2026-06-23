@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const crypto = require("crypto");
+const { applyPostgresMigrations } = require("./postgres-migrations");
 
 const root = path.resolve(__dirname, "..");
 
@@ -12,9 +13,13 @@ if (process.argv.includes("--help")) {
   process.exit(0);
 }
 
-main();
+main().catch((error) => {
+  console.error(`Erro ao aplicar seed demonstrativo: ${error.message}`);
+  process.exit(1);
+});
 
-function main() {
+async function main() {
+  await applyPostgresMigrations({ root, runSql });
   const data = buildDemoData();
   const sql = buildSeedSql(data);
   const result = spawnSync(resolvePsqlCommand(), buildPsqlArgs(), {
@@ -38,6 +43,20 @@ function main() {
   console.log(`Contratos: ${data.contracts.length}`);
   console.log(`Projetos: ${data.projects.length}`);
   console.log(`Tarefas: ${data.tasks.length}`);
+}
+
+function runSql(sql) {
+  const result = spawnSync(resolvePsqlCommand(), buildPsqlArgs(), {
+    input: sql,
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: false,
+    env: process.env,
+    encoding: "utf-8"
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || "psql falhou.");
+  }
+  return result.stdout || "";
 }
 
 function printHelp() {
