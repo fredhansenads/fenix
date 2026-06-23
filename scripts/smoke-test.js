@@ -93,6 +93,36 @@ async function main() {
   assert(Array.isArray(audit.items), "Auditoria paginada nao retornou items.");
   assert(Number.isFinite(audit.total), "Auditoria paginada nao retornou total.");
 
+  const complianceExport = await request("/api/compliance/export", { headers });
+  assert(complianceExport.data?.clients && Array.isArray(complianceExport.data.clients), "Exportacao LGPD nao retornou clientes.");
+
+  const complianceClient = await request("/api/clients", {
+    method: "POST",
+    headers,
+    body: {
+      type: "PJ",
+      name: `Cliente LGPD Smoke ${Date.now()}`,
+      document: "88.888.888/0001-88",
+      email: `lgpd-smoke-${Date.now()}@teste.com`,
+      phone: "(11) 90000-0000",
+      status: "ativo",
+      notes: "Registro temporario para teste de anonimizacao."
+    }
+  });
+  const anonymized = await request("/api/compliance/anonymize-client", {
+    method: "POST",
+    headers,
+    body: {
+      clientId: complianceClient.id,
+      confirm: "ANONYMIZE"
+    }
+  });
+  assert(anonymized.client?.document === "ANONIMIZADO", "Cliente LGPD nao foi anonimizado.");
+  await request(`/api/clients/${complianceClient.id}`, {
+    method: "DELETE",
+    headers
+  });
+
   const reads = await request("/api/notification-reads", { headers });
   assert(Array.isArray(reads), "Notificacoes lidas nao retornaram lista.");
 
@@ -111,7 +141,7 @@ async function main() {
   });
   assert(temporaryTenant.id, "Empresa temporaria nao foi criada.");
 
-  const tenantAdminPassword = `Smoke${tenantSuffix}!`;
+  const tenantAdminPassword = "Azul#9012";
   const temporaryUser = await request("/api/users", {
     method: "POST",
     headers,
@@ -134,10 +164,33 @@ async function main() {
     }
   });
   const tenantCookie = extractCookie(tenantLoginResponse.headers.get("set-cookie"), "santuserp_session");
-  const tenantHeaders = { Cookie: tenantCookie };
+  let tenantHeaders = { Cookie: tenantCookie };
   const tenantBootstrap = await request("/api/bootstrap", { headers: tenantHeaders });
   assert(tenantBootstrap.tenants.length === 1 && tenantBootstrap.tenants[0].id === temporaryTenant.id, "Tenant admin enxergou empresa indevida.");
   assert(tenantBootstrap.clients.length === 0, "Tenant admin enxergou clientes de outra empresa.");
+
+  const resetRequest = await request("/api/auth/request-password-reset", {
+    method: "POST",
+    body: { email: temporaryUser.email }
+  });
+  assert(resetRequest.resetToken, "Reset de senha nao retornou token em ambiente local.");
+  const resetPassword = "Verde#9012";
+  const resetCompleted = await request("/api/auth/reset-password", {
+    method: "POST",
+    body: {
+      token: resetRequest.resetToken,
+      password: resetPassword
+    }
+  });
+  assert(resetCompleted.ok === true, "Reset de senha nao foi concluido.");
+  const tenantLoginAfterReset = await rawRequest("/api/auth/login", {
+    method: "POST",
+    body: {
+      email: temporaryUser.email,
+      password: resetPassword
+    }
+  });
+  tenantHeaders = { Cookie: extractCookie(tenantLoginAfterReset.headers.get("set-cookie"), "santuserp_session") };
 
   const tenantClient = await request("/api/clients", {
     method: "POST",

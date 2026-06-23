@@ -5,6 +5,8 @@ const API_HEALTH_URL = "/api/health";
 const API_NOTIFICATION_READS_URL = "/api/notification-reads";
 const API_LOGIN_URL = "/api/auth/login";
 const API_LOGOUT_URL = "/api/auth/logout";
+const API_COMPLIANCE_EXPORT_URL = "/api/compliance/export";
+const API_COMPLIANCE_ANONYMIZE_CLIENT_URL = "/api/compliance/anonymize-client";
 const API_COLLECTIONS = new Set(["tenants", "users", "clients", "suppliers", "categories", "payables", "receivables", "proposals", "contracts", "projects", "tasks"]);
 
 const modules = [
@@ -1288,7 +1290,7 @@ const schemas = {
       ["tenantId", "Empresa", "relation", "tenants"],
       ["name", "Nome", "text"],
       ["email", "E-mail", "email"],
-      ["password", "Senha", "text"],
+      ["password", "Senha", "password"],
       ["role", "Perfil", "select", Object.keys(roleLabels)],
       ["status", "Status", "select", ["ativo", "inativo"]]
     ],
@@ -2555,7 +2557,7 @@ function renderActivity() {
           Acao
           <select data-activity-action>
             <option value="">Todas</option>
-            ${["created", "updated", "deleted", "denied"].map((action) => `<option value="${action}" ${activityFilters.action === action ? "selected" : ""}>${activityActionLabel(action)}</option>`).join("")}
+            ${["created", "updated", "deleted", "denied", "login", "logout", "login_failed", "password_reset_requested", "password_reset_completed", "data_exported", "data_anonymized"].map((action) => `<option value="${action}" ${activityFilters.action === action ? "selected" : ""}>${activityActionLabel(action)}</option>`).join("")}
           </select>
         </label>
         <label class="filter-field">
@@ -2841,6 +2843,13 @@ function activityTone(action) {
   if (action === "updated") return "warning";
   if (action === "deleted") return "danger";
   if (action === "denied") return "danger";
+  if (action === "login") return "success";
+  if (action === "logout") return "neutral";
+  if (action === "login_failed") return "danger";
+  if (action === "password_reset_requested") return "warning";
+  if (action === "password_reset_completed") return "success";
+  if (action === "data_exported") return "neutral";
+  if (action === "data_anonymized") return "warning";
   return "neutral";
 }
 
@@ -2849,7 +2858,14 @@ function activityActionLabel(action) {
     created: "Criado",
     updated: "Atualizado",
     deleted: "Excluido",
-    denied: "Negado"
+    denied: "Negado",
+    login: "Login",
+    logout: "Logout",
+    login_failed: "Falha de login",
+    password_reset_requested: "Reset solicitado",
+    password_reset_completed: "Senha redefinida",
+    data_exported: "Dados exportados",
+    data_anonymized: "Dados anonimizados"
   };
   return labels[action] || labelize(action);
 }
@@ -2865,7 +2881,9 @@ function activityCollectionLabel(collection) {
     proposals: "Propostas",
     contracts: "Contratos",
     projects: "Projetos",
-    tasks: "Tarefas"
+    tasks: "Tarefas",
+    auth: "Autenticacao",
+    compliance: "Compliance"
   };
   return labels[collection] || labelize(collection);
 }
@@ -2903,12 +2921,17 @@ function formatDateTime(value) {
 }
 
 function renderSettings() {
+  const clientOptions = state.clients
+    .slice()
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"))
+    .map((client) => `<option value="${client.id}">${escapeHtml(client.name)} - ${escapeHtml(client.document || "sem documento")}</option>`)
+    .join("");
   content.innerHTML = `
     <section class="grid two-columns">
       <article class="card">
         <p class="eyebrow">Seguranca</p>
         <h3>Politicas administrativas</h3>
-        <p>O sistema controla acesso por perfil, registra historico de atividades, usa senha com hash no backend e autentica por cookie HttpOnly. As proximas camadas recomendadas sao recuperacao de senha, 2FA e politicas avancadas de acesso.</p>
+        <p>O sistema controla acesso por perfil, registra historico de atividades, usa senha com hash no backend, politica de senha forte e autentica por cookie HttpOnly. As proximas camadas recomendadas sao 2FA e politicas avancadas de acesso.</p>
       </article>
       <article class="card">
         <p class="eyebrow">Roadmap</p>
@@ -2920,6 +2943,34 @@ function renderSettings() {
       <div class="panel-header"><h3>Manutencao local</h3></div>
       <div class="panel-body toolbar-actions">
         <button type="button" class="secondary" id="seedButton">Restaurar dados demonstrativos</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Compliance e LGPD</h3>
+          <span class="panel-subtitle">Exportacao de dados e anonimizacao controlada de cliente</span>
+        </div>
+      </div>
+      <div class="panel-body form-grid">
+        <div class="form-field full">
+          <label>Exportacao da empresa</label>
+          <button type="button" class="secondary" id="complianceExportButton">Exportar dados JSON</button>
+        </div>
+        <label class="form-field">
+          Cliente
+          <select id="complianceClientSelect">
+            <option value="">Selecione</option>
+            ${clientOptions}
+          </select>
+        </label>
+        <label class="form-field">
+          Confirmacao
+          <input id="complianceConfirmInput" placeholder="Digite ANONYMIZE" />
+        </label>
+        <div class="form-field full">
+          <button type="button" class="danger" id="complianceAnonymizeButton">Anonimizar cliente</button>
+        </div>
       </div>
     </section>
     <section class="panel">
@@ -2944,7 +2995,37 @@ function renderSettings() {
     navigate("dashboard");
   });
   document.querySelector("#healthRefreshButton").addEventListener("click", loadHealthStatus);
+  document.querySelector("#complianceExportButton").addEventListener("click", exportComplianceData);
+  document.querySelector("#complianceAnonymizeButton").addEventListener("click", anonymizeComplianceClient);
   loadHealthStatus();
+}
+
+async function exportComplianceData() {
+  const payload = await apiRequest(API_COMPLIANCE_EXPORT_URL, { method: "GET", cache: "no-store" });
+  if (!payload) {
+    toast(apiErrorMessage("Nao foi possivel exportar os dados."));
+    return;
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  downloadJson(`santuserp-lgpd-${date}.json`, payload);
+  toast("Dados exportados em JSON.");
+}
+
+async function anonymizeComplianceClient() {
+  const clientId = document.querySelector("#complianceClientSelect")?.value || "";
+  const confirm = document.querySelector("#complianceConfirmInput")?.value || "";
+  const result = await apiRequest(API_COMPLIANCE_ANONYMIZE_CLIENT_URL, {
+    method: "POST",
+    body: JSON.stringify({ clientId, confirm })
+  });
+  if (!result) {
+    toast(apiErrorMessage("Nao foi possivel anonimizar o cliente."));
+    return;
+  }
+  state = await loadState();
+  hydrateReferences();
+  toast("Cliente anonimizado com sucesso.");
+  renderSettings();
 }
 
 function renderHealthStatus(health = null) {
@@ -3024,6 +3105,15 @@ function downloadCsv(filename, rows) {
     ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(";"))
   ].join("\n");
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = filename;

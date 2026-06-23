@@ -11,6 +11,7 @@ Status geral atual:
 - Etapa 2 deste roadmap concluida: modelo multiempresa/multicliente com empresas, `tenant_id`, vinculo de usuarios e isolamento por sessao nas rotas principais.
 - Etapa 3 deste roadmap concluida: migrations PostgreSQL versionadas, tabela `schema_migrations`, comandos de aplicacao/listagem/dry-run e aplicacao automatica pelo servidor.
 - Etapa 4 deste roadmap concluida: ambientes documentados, modelos de `.env`, processo de servico, release, rollback e exigencia de PostgreSQL em producao.
+- Etapa 5 deste roadmap concluida como entrega inicial: politica de senha forte, recuperacao de senha com token temporario, auditoria de login/logout/falhas, rate limit em recuperacao e rotas LGPD para exportacao e anonimizacao controlada.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -35,10 +36,7 @@ Status:
 
 Proximos refinamentos:
 
-- Recuperacao de senha.
-- Politica de senha forte.
 - 2FA para administradores.
-- Registro de login, logout e falhas de login na auditoria.
 - Revisao de CSRF antes de expor fora do ambiente local.
 
 Criterio de conclusao:
@@ -132,20 +130,27 @@ Entregas principais:
 
 - Politica de senha forte.
 - Recuperacao de senha com token temporario.
-- 2FA para administradores.
-- Rate limit em rotas sensiveis.
-- Protecao CSRF se necessario.
+- Rate limit em rotas sensiveis de login e recuperacao.
 - Auditoria de login/logout/falhas.
-- Revisao de permissoes no backend.
-- Preparacao LGPD.
-- Exportacao de dados por cliente.
-- Anonimizacao/exclusao controlada de dados.
+- Exportacao de dados por cliente/empresa.
+- Anonimizacao controlada de dados pessoais de cliente.
+- Tela administrativa inicial para acoes de compliance.
+
+Entregas futuras complementares:
+
+- 2FA para administradores.
+- Protecao CSRF antes de exposicao publica ampla, se o modelo de deploy exigir.
+- Revisao juridica de textos, politica de privacidade e termos de uso.
 
 Criterio de conclusao:
 
 - Rotas sensiveis protegidas.
 - Eventos criticos auditados.
 - Dados pessoais possuem fluxo de exportacao e remocao controlada.
+
+Status:
+
+- Concluido como base inicial de producao.
 
 ## 6. Melhorar UX para cliente real
 
@@ -279,7 +284,7 @@ Criterio de conclusao:
 2. Implementar multiempresa/multicliente. Concluido.
 3. Criar migrations formais. Concluido.
 4. Preparar deploy/homologacao/producao. Concluido.
-5. Reforcar compliance e auditoria.
+5. Reforcar compliance e auditoria. Concluido como base inicial.
 6. Melhorar UX/onboarding.
 7. Completar funcionalidades essenciais de produto.
 8. Ampliar testes e QA.
@@ -288,12 +293,12 @@ Criterio de conclusao:
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 5 - seguranca e compliance**, porque o sistema ja possui base operacional para deploy e agora precisa reforcar recuperacao de senha, politica de senha, auditoria de acesso e preparacao LGPD.
+A proxima etapa mais importante e a **Etapa 6 - melhorar UX para cliente real**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy e camada inicial de seguranca/compliance.
 
-Primeira entrega sugerida da Etapa 5:
+Primeira entrega sugerida da Etapa 6:
 
-- Implementar recuperacao de senha com token temporario.
-- Registrar login, logout e falhas de login na auditoria.
-- Definir politica de senha forte.
-- Criar base inicial para exportacao/remocao controlada de dados por cliente.
+- Criar onboarding inicial para primeira configuracao.
+- Melhorar textos de estados vazios e feedback de carregamento/salvamento.
+- Revisar Configuracoes para perfil da empresa e preferencias.
+- Fazer uma rodada visual responsiva em notebook, tablet e celular.
 

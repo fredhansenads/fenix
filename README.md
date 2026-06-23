@@ -55,6 +55,7 @@ No Windows, tambem e possivel usar o inicializador local:
 - Automacoes iniciais para gerar tarefas de acompanhamento
 - Historico de atividades
 - Empresas e isolamento multiempresa
+- Seguranca/compliance inicial: senha forte, reset de senha, auditoria de autenticacao e LGPD inicial
 - Configuracoes administrativas
 - Listas responsivas com leitura otimizada no mobile
 
@@ -124,7 +125,7 @@ Para rodar uma validacao automatizada basica do sistema:
 node scripts/smoke-test.js
 ```
 
-O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, criacao/edicao/exclusao de cliente, auditoria paginada e notificacoes lidas.
+O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, criacao/edicao/exclusao de cliente, auditoria paginada, notificacoes lidas, reset de senha e rotas iniciais de compliance.
 
 Para conferir ambiente, banco, backups e scripts operacionais:
 
@@ -164,14 +165,23 @@ Autenticacao local:
 
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `POST /api/auth/request-password-reset`
+- `POST /api/auth/reset-password`
 
 O login cria uma sessao temporaria e envia o cookie `santuserp_session` com `HttpOnly`, `SameSite=Lax` e expiracao alinhada a sessao. Quando o servidor esta ativo, o frontend autentica as acoes pela sessao em cookie, sem gravar o token puro no `localStorage`. O cabecalho `Authorization: Bearer <token>` continua aceito apenas como compatibilidade tecnica para scripts e transicao.
 
 Quando PostgreSQL esta ativo, a sessao tambem e persistida na tabela `user_sessions` usando hash SHA-256 do token. Isso permite validar sessoes mesmo apos reiniciar o servidor local, sem salvar o token puro no banco.
 
-O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta.
+O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta. A recuperacao de senha tambem possui limite por IP/e-mail.
 
-As senhas salvas pela API local sao convertidas para hash `scrypt` antes da gravacao. As respostas publicas da API nao retornam senha nem hash de senha dos usuarios.
+As senhas salvas pela API local sao convertidas para hash `scrypt` antes da gravacao. Novas senhas passam por politica forte minima e as respostas publicas da API nao retornam senha nem hash de senha dos usuarios.
+
+Rotas iniciais de compliance:
+
+- `GET /api/compliance/export`
+- `POST /api/compliance/anonymize-client`
+
+Essas rotas exigem perfil `admin` ou `gestor` e permitem exportar dados visiveis da empresa e anonimizar dados pessoais diretos de um cliente mediante confirmacao explicita.
 
 O servidor mantem compatibilidade com o estado completo em:
 
@@ -255,4 +265,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e fortalecer seguranca e compliance: recuperacao de senha, politica de senha forte, 2FA administrativo, auditoria de login e preparacao LGPD.
+A proxima etapa recomendada e melhorar UX/onboarding para cliente real: primeira configuracao, perfil da empresa, preferencias, mensagens, estados vazios e revisao responsiva.

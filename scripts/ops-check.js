@@ -92,6 +92,7 @@ function checkDatabase() {
     "projects",
     "tasks",
     "audit_logs",
+    "password_reset_tokens",
     "notification_reads",
     "user_sessions"
   ];

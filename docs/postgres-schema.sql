@@ -169,7 +169,7 @@ CREATE TABLE tasks (
 CREATE TABLE audit_logs (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
-  action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'denied')),
+  action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'denied', 'login', 'logout', 'login_failed', 'password_reset_requested', 'password_reset_completed', 'data_exported', 'data_anonymized')),
   collection TEXT NOT NULL,
   record_id TEXT,
   record_label TEXT,
@@ -181,6 +181,18 @@ CREATE TABLE audit_logs (
   denied_reason TEXT,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE password_reset_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  requested_by_ip TEXT,
+  requested_user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ
 );
 
 CREATE TABLE notification_reads (
@@ -223,6 +235,9 @@ CREATE INDEX idx_tasks_tenant_status_due_date ON tasks(tenant_id, status, due_da
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_collection_action ON audit_logs(collection, action);
 CREATE INDEX idx_audit_logs_tenant_created_at ON audit_logs(tenant_id, created_at DESC);
+CREATE INDEX idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
+CREATE INDEX idx_password_reset_tokens_user_expires ON password_reset_tokens(user_id, expires_at);
+CREATE INDEX idx_password_reset_tokens_tenant ON password_reset_tokens(tenant_id);
 CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
 CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_tenant_id ON user_sessions(tenant_id);

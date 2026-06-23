@@ -174,7 +174,7 @@ function buildDemoData() {
 function buildSeedSql(data) {
   const statements = [
     "BEGIN;",
-    "TRUNCATE user_sessions, notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;"
+    "TRUNCATE password_reset_tokens, user_sessions, notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;"
   ];
 
   pushRows(statements, "tenants", data.tenants, mapTenant);

@@ -4,7 +4,7 @@
 
 O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
-O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local e painel de saude do sistema.
+O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema e base inicial de seguranca/compliance.
 
 A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
 
@@ -105,6 +105,7 @@ backups/*.dump
 - Empresas e isolamento multiempresa.
 - Configuracoes administrativas.
 - Saude do sistema.
+- Compliance e LGPD inicial.
 
 ## 6. Perfis de usuario
 
@@ -215,7 +216,7 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 
 ### Historico de atividades
 
-- Eventos de criacao, edicao, exclusao e negacao de acesso.
+- Eventos de criacao, edicao, exclusao, negacao de acesso, login, logout, falha de login, reset de senha, exportacao e anonimizacao.
 - Filtros por busca, acao e modulo.
 - Leitura textual dos eventos.
 - Exportacao CSV.
@@ -225,6 +226,8 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 
 - Politicas administrativas.
 - Roadmap modular.
+- Exportacao JSON de dados da empresa para atendimento LGPD.
+- Anonimizacao controlada de cliente mediante confirmacao explicita.
 - Restauracao de dados demonstrativos.
 - Painel de saude do sistema.
 
@@ -483,6 +486,8 @@ docs/santuserp-ambiente-local.md
 
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `POST /api/auth/request-password-reset`
+- `POST /api/auth/reset-password`
 
 O login cria uma sessao temporaria e envia o cookie `santuserp_session` com `HttpOnly`, `SameSite=Lax` e expiracao alinhada ao tempo da sessao. O frontend autentica as chamadas pela sessao em cookie e nao grava o token puro no `localStorage`.
 
@@ -490,7 +495,11 @@ O cabecalho `Authorization: Bearer <token>` continua aceito como compatibilidade
 
 Quando PostgreSQL esta ativo, a sessao tambem e registrada na tabela `user_sessions` usando hash SHA-256 do token. Isso permite validar sessoes mesmo depois de reiniciar o servidor local, sem salvar o token puro no banco.
 
-O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta.
+O login possui limite basico de tentativas por IP/e-mail para reduzir risco de forca bruta. O pedido de recuperacao de senha tambem possui limite por IP/e-mail.
+
+As senhas salvas pela API sao convertidas para hash `scrypt` antes da gravacao. Novas senhas precisam cumprir politica minima forte: 8 caracteres, letra minuscula, letra maiuscula, numero, caractere especial e sem uso obvio de nome/e-mail.
+
+O reset de senha usa token temporario com hash SHA-256 armazenado no backend. Em ambiente local/desenvolvimento, o token pode ser retornado na resposta para teste do fluxo; em producao, ele nao deve ser exposto diretamente e deve ser entregue por integracao de e-mail transacional.
 
 ### Estado completo
 
@@ -549,6 +558,15 @@ Parametros aceitos:
 
 A tela de Historico usa paginacao server-side para consultar volumes menores de eventos por vez.
 
+### Compliance e LGPD
+
+- `GET /api/compliance/export`
+- `POST /api/compliance/anonymize-client`
+
+Restritas a `admin` e `gestor`.
+
+A exportacao retorna JSON com os dados visiveis para a sessao atual. A anonimizacao exige `clientId` e confirmacao `ANONYMIZE`, preservando vinculos historicos e removendo dados pessoais diretos do cliente.
+
 ### Notificacoes lidas
 
 - `GET /api/notification-reads`
@@ -570,6 +588,10 @@ Restrita a `admin` e `gestor`.
 - Sessoes autenticadas usam cookie `HttpOnly` e `SameSite=Lax`.
 - O frontend nao persiste token puro no `localStorage`.
 - Tentativas repetidas de login invalido sao limitadas por janela de tempo.
+- Recuperacao de senha usa token temporario, hash no backend e expiracao.
+- Novas senhas devem seguir politica minima forte.
+- Login, logout, falha de login e reset de senha sao registrados na auditoria.
+- Exportacao LGPD e anonimizacao de cliente exigem perfil `admin` ou `gestor`.
 - Respostas publicas nao retornam senha nem hash.
 - Valores financeiros devem ser maiores que zero.
 - Datas devem usar formato `AAAA-MM-DD`.
@@ -645,6 +667,7 @@ Fase 2 concluida no escopo planejado:
 - Modelo multiempresa/multicliente com empresas, `tenant_id`, usuarios vinculados por empresa e isolamento nas rotas principais.
 - Migrations PostgreSQL versionadas com tabela `schema_migrations`, comando manual e aplicacao automatica pelo servidor.
 - Deploy e ambientes documentados com modelos de `.env`, script de servico, checklist de release e rollback.
+- Seguranca/compliance inicial com senha forte, reset temporario, auditoria de autenticacao, rate limit e rotas LGPD.
 
 ## 22. Status da Fase 3
 
@@ -659,7 +682,7 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Fortalecer seguranca e compliance.
+1. Melhorar UX/onboarding para cliente real.
 2. Expandir automacoes com regras configuraveis.
 3. Iniciar assistente de IA para analise executiva.
 

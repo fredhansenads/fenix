@@ -22,6 +22,11 @@ const sessionCookieName = "santuserp_session";
 const loginAttempts = new Map();
 const loginWindowMs = 1000 * 60 * 15;
 const maxLoginAttempts = 5;
+const passwordResetAttempts = new Map();
+const passwordResetWindowMs = 1000 * 60 * 15;
+const maxPasswordResetAttempts = 3;
+const passwordResetTtlMs = 1000 * 60 * 30;
+const exposeResetToken = process.env.SANTUSERP_EXPOSE_RESET_TOKEN === "true" || process.env.NODE_ENV !== "production";
 
 const types = {
   ".html": "text/html;charset=utf-8",
@@ -190,6 +195,16 @@ async function handleApi(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/auth/request-password-reset") {
+    await handleRequestPasswordResetApi(request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/auth/reset-password") {
+    await handleResetPasswordApi(request, response);
+    return;
+  }
+
   if (requestUrl.pathname === "/api/bootstrap") {
     await handleBootstrapApi(request, response);
     return;
@@ -212,6 +227,16 @@ async function handleApi(request, response, requestUrl) {
 
   if (requestUrl.pathname === "/api/activity-log") {
     await handleActivityLogApi(request, response, requestUrl);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/compliance/export") {
+    await handleComplianceExportApi(request, response);
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/compliance/anonymize-client") {
+    await handleComplianceAnonymizeClientApi(request, response);
     return;
   }
 
@@ -253,6 +278,20 @@ async function handleLoginApi(request, response) {
 
   if (!user) {
     registerFailedLogin(attemptKey);
+    const candidate = users.find((item) => String(item.email || "").toLowerCase() === email);
+    addSystemActivityLog(data, request, "login_failed", "auth", candidate || {
+      id: email || "login",
+      email,
+      name: email || "Login sem e-mail",
+      tenantId: candidate?.tenantId || defaultTenantId
+    }, {
+      actorId: candidate?.id || "anonymous",
+      actorName: candidate?.name || email || "Usuario nao identificado",
+      actorRole: candidate?.role || "anonymous",
+      tenantId: candidate?.tenantId || defaultTenantId,
+      deniedReason: "Credenciais invalidas ou usuario inativo."
+    });
+    await writeDatabase(data);
     sendJson(response, 401, { error: "Invalid credentials" });
     return;
   }
@@ -264,6 +303,11 @@ async function handleLoginApi(request, response) {
     delete user.password;
     await writeDatabase(database.data);
   }
+
+  addSystemActivityLog(data, request, "login", "auth", user, {
+    tenantId: user.tenantId || defaultTenantId
+  });
+  await writeDatabase(data);
 
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + sessionTtlMs).toISOString();
@@ -306,6 +350,7 @@ async function handleLogoutApi(request, response) {
     return;
   }
 
+  const session = await getSessionFromRequest(request);
   const token = getRequestToken(request);
   if (token) {
     sessions.delete(token);
@@ -313,9 +358,150 @@ async function handleLogoutApi(request, response) {
       await databaseRepository.deleteSession(token);
     }
   }
+  if (session) {
+    const database = await readDatabase();
+    if (database.exists) {
+      const data = ensureTenantModel(database.data);
+      addSystemActivityLog(data, request, "logout", "auth", {
+        id: session.id,
+        name: session.name,
+        email: session.email,
+        role: session.role,
+        tenantId: session.tenantId
+      }, {
+        actorId: session.id,
+        actorName: session.name,
+        actorRole: session.role,
+        tenantId: session.tenantId
+      });
+      await writeDatabase(data);
+    }
+  }
   sendJson(response, 200, { ok: true }, {
     "Set-Cookie": buildExpiredSessionCookie()
   });
+}
+
+async function handleRequestPasswordResetApi(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const payload = await parseJsonBody(request, response);
+  if (!payload) return;
+
+  const email = String(payload.email || "").trim().toLowerCase();
+  const attemptKey = getPasswordResetAttemptKey(request, email);
+  if (isPasswordResetRateLimited(attemptKey)) {
+    sendJson(response, 429, {
+      error: "Too many attempts",
+      message: "Muitas solicitacoes de recuperacao. Aguarde alguns minutos antes de tentar novamente."
+    });
+    return;
+  }
+  registerPasswordResetAttempt(attemptKey);
+
+  const genericMessage = "Se o e-mail existir e estiver ativo, um link temporario de redefinicao sera disponibilizado.";
+  const database = await readDatabase();
+  const data = ensureTenantModel(database.exists ? database.data : {});
+  const users = database.exists && Array.isArray(data.users) ? data.users : [];
+  const user = users.find((item) => String(item.email || "").toLowerCase() === email && item.status === "ativo");
+  if (!user) {
+    sendJson(response, 200, { ok: true, message: genericMessage });
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const resetRecord = {
+    id: createId(),
+    userId: user.id,
+    tenantId: user.tenantId || defaultTenantId,
+    tokenHash: hashToken(token),
+    requestedByIp: getRequestIp(request),
+    requestedUserAgent: request.headers["user-agent"] || "",
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + passwordResetTtlMs).toISOString(),
+    usedAt: ""
+  };
+
+  addSystemActivityLog(data, request, "password_reset_requested", "auth", user, {
+    actorId: user.id,
+    actorName: user.name,
+    actorRole: user.role,
+    tenantId: user.tenantId || defaultTenantId
+  });
+  await writeDatabase(data);
+  await savePasswordResetToken(data, resetRecord);
+
+  sendJson(response, 200, {
+    ok: true,
+    message: genericMessage,
+    expiresAt: resetRecord.expiresAt,
+    ...(exposeResetToken ? { resetToken: token } : {})
+  });
+}
+
+async function handleResetPasswordApi(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const payload = await parseJsonBody(request, response);
+  if (!payload) return;
+
+  const token = String(payload.token || "").trim();
+  const password = String(payload.password || "");
+  if (!token || !password) {
+    sendJson(response, 400, {
+      error: "Validation failed",
+      fields: {
+        token: token ? undefined : "Token obrigatorio.",
+        password: password ? undefined : "Senha obrigatoria."
+      }
+    });
+    return;
+  }
+
+  const resetToken = await findPasswordResetToken(token);
+  if (!resetToken) {
+    sendJson(response, 400, {
+      error: "Invalid token",
+      message: "Token invalido, expirado ou ja utilizado."
+    });
+    return;
+  }
+
+  const database = await readDatabase();
+  const data = ensureTenantModel(database.exists ? database.data : {});
+  const users = Array.isArray(data.users) ? data.users : [];
+  const userIndex = users.findIndex((item) => item.id === resetToken.userId && item.status === "ativo");
+  if (userIndex === -1) {
+    sendJson(response, 400, {
+      error: "Invalid token",
+      message: "Usuario nao encontrado ou inativo."
+    });
+    return;
+  }
+
+  const user = users[userIndex];
+  const passwordValidation = validatePasswordPolicy(password, user);
+  if (!passwordValidation.valid) {
+    sendJson(response, 400, passwordValidation);
+    return;
+  }
+
+  users[userIndex] = prepareUserForStorage({ ...user, password }, user);
+  addSystemActivityLog(data, request, "password_reset_completed", "auth", users[userIndex], {
+    actorId: user.id,
+    actorName: user.name,
+    actorRole: user.role,
+    tenantId: user.tenantId || defaultTenantId
+  });
+  await writeDatabase(data);
+  await markPasswordResetTokenUsed(token);
+  sendJson(response, 200, { ok: true, message: "Senha redefinida com sucesso." });
 }
 
 async function handleBootstrapApi(request, response) {
@@ -493,6 +679,90 @@ async function handleActivityLogApi(request, response, requestUrl) {
     totalPages,
     summary: summarizeActivityLogsForApi(filteredLogs),
     collections: getActivityCollectionsForApi(logs)
+  });
+}
+
+async function handleComplianceExportApi(request, response) {
+  if (request.method !== "GET") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
+
+  const session = await getSessionFromRequest(request);
+  const database = await readDatabase();
+  const data = database.exists ? ensureTenantModel(database.data) : {};
+  const scopedData = sanitizeState(scopeDataForSession(data, session));
+  const tenant = session?.isGlobalAdmin ? { id: "all", name: "Todas as empresas" } : getTenantForUser(data, { tenantId: session.tenantId });
+
+  addSystemActivityLog(data, request, "data_exported", "compliance", tenant, {
+    actorId: session.id,
+    actorName: session.name,
+    actorRole: session.role,
+    tenantId: session.tenantId,
+    changedFields: []
+  });
+  await writeDatabase(data);
+
+  sendJson(response, 200, {
+    exportedAt: new Date().toISOString(),
+    tenant,
+    data: scopedData
+  });
+}
+
+async function handleComplianceAnonymizeClientApi(request, response) {
+  if (request.method !== "POST") {
+    sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  if (!(await authorizeSessionRoles(request, response, ["admin", "gestor"]))) return;
+
+  const payload = await parseJsonBody(request, response);
+  if (!payload) return;
+
+  const clientId = String(payload.clientId || "").trim();
+  const confirmation = String(payload.confirm || "").trim();
+  if (!clientId || confirmation !== "ANONYMIZE") {
+    sendJson(response, 400, {
+      error: "Validation failed",
+      fields: {
+        clientId: clientId ? undefined : "Selecione um cliente.",
+        confirm: confirmation === "ANONYMIZE" ? undefined : "Digite ANONYMIZE para confirmar."
+      }
+    });
+    return;
+  }
+
+  const session = await getSessionFromRequest(request);
+  const database = await readDatabase();
+  const data = database.exists ? ensureTenantModel(database.data) : {};
+  data.clients = Array.isArray(data.clients) ? data.clients : [];
+  const index = data.clients.findIndex((client) => client.id === clientId && canAccessRecord(client, "clients", session));
+  if (index === -1) {
+    sendJson(response, 404, { error: "Record not found" });
+    return;
+  }
+
+  const previousClient = data.clients[index];
+  const anonymizedClient = {
+    ...previousClient,
+    name: `Cliente anonimizado ${previousClient.id.slice(0, 6)}`,
+    document: "ANONIMIZADO",
+    email: `anon-${previousClient.id}@santuserp.local`,
+    phone: "",
+    status: "inativo",
+    notes: `Dados pessoais anonimizados em ${new Date().toISOString()}.`
+  };
+  data.clients[index] = anonymizedClient;
+  const auditLog = await addActivityLog(data, request, "data_anonymized", "compliance", anonymizedClient, previousClient);
+  await writeDatabase(data);
+  sendJson(response, 200, {
+    ok: true,
+    client: sanitizeRecord("clients", anonymizedClient),
+    auditLog
   });
 }
 
@@ -699,6 +969,29 @@ async function addActivityLog(data, request, action, collection, item, previousI
   return auditLog;
 }
 
+function addSystemActivityLog(data, request, action, collection, item, extra = {}) {
+  if (!data) return null;
+  data.auditLogs = Array.isArray(data.auditLogs) ? data.auditLogs : [];
+  const auditLog = {
+    id: createId(),
+    action,
+    collection,
+    recordId: item?.id || "",
+    recordLabel: getRecordLabel(item),
+    actorId: extra.actorId || item?.id || "system",
+    actorName: extra.actorName || item?.name || "Sistema",
+    actorRole: extra.actorRole || item?.role || "system",
+    tenantId: extra.tenantId || item?.tenantId || defaultTenantId,
+    changedFields: extra.changedFields || [],
+    metadata: getRequestMetadata(request),
+    deniedAction: extra.deniedAction,
+    deniedReason: extra.deniedReason,
+    createdAt: new Date().toISOString()
+  };
+  data.auditLogs = [auditLog, ...data.auditLogs].slice(0, 200);
+  return auditLog;
+}
+
 function getRequestMetadata(request) {
   const token = getRequestToken(request);
   return {
@@ -875,6 +1168,29 @@ function registerFailedLogin(key) {
 
 function clearLoginAttempts(key) {
   loginAttempts.delete(key);
+}
+
+function getPasswordResetAttemptKey(request, email) {
+  return `${getRequestIp(request)}:${email || "sem-email"}:reset`;
+}
+
+function isPasswordResetRateLimited(key) {
+  const attempt = passwordResetAttempts.get(key);
+  if (!attempt) return false;
+  if (Date.now() - attempt.firstAttemptAt > passwordResetWindowMs) {
+    passwordResetAttempts.delete(key);
+    return false;
+  }
+  return attempt.count >= maxPasswordResetAttempts;
+}
+
+function registerPasswordResetAttempt(key) {
+  const current = passwordResetAttempts.get(key);
+  if (!current || Date.now() - current.firstAttemptAt > passwordResetWindowMs) {
+    passwordResetAttempts.set(key, { count: 1, firstAttemptAt: Date.now() });
+    return;
+  }
+  current.count += 1;
 }
 
 function sanitizeUser(user) {
@@ -1141,7 +1457,20 @@ function summarizeActivityLogsForApi(logs) {
     summary[log.action] = (summary[log.action] || 0) + 1;
     summary.total += 1;
     return summary;
-  }, { total: 0, created: 0, updated: 0, deleted: 0, denied: 0 });
+  }, {
+    total: 0,
+    created: 0,
+    updated: 0,
+    deleted: 0,
+    denied: 0,
+    login: 0,
+    logout: 0,
+    login_failed: 0,
+    password_reset_requested: 0,
+    password_reset_completed: 0,
+    data_exported: 0,
+    data_anonymized: 0
+  });
 }
 
 function getActivityCollectionsForApi(logs) {
@@ -1197,6 +1526,13 @@ function validateRecord(collection, record) {
     fields.password = "Campo obrigatorio.";
   }
 
+  if (collection === "users" && !isBlank(record.password)) {
+    const passwordValidation = validatePasswordPolicy(record.password, record);
+    if (!passwordValidation.valid) {
+      fields.password = passwordValidation.fields.password;
+    }
+  }
+
   Object.entries(rules.allowed || {}).forEach(([field, options]) => {
     if (!isBlank(record[field]) && !options.includes(record[field])) {
       fields[field] = "Valor nao permitido.";
@@ -1226,6 +1562,37 @@ function validateRecord(collection, record) {
     : { valid: true };
 }
 
+function validatePasswordPolicy(password, context = {}) {
+  const value = String(password || "");
+  const fields = {};
+  if (value.length < 8) {
+    fields.password = "Use ao menos 8 caracteres.";
+  } else if (!/[a-z]/.test(value)) {
+    fields.password = "Inclua letra minuscula.";
+  } else if (!/[A-Z]/.test(value)) {
+    fields.password = "Inclua letra maiuscula.";
+  } else if (!/\d/.test(value)) {
+    fields.password = "Inclua numero.";
+  } else if (!/[^A-Za-z0-9]/.test(value)) {
+    fields.password = "Inclua caractere especial.";
+  }
+
+  const lowered = value.toLowerCase();
+  const emailPrefix = String(context.email || "").split("@")[0].toLowerCase();
+  if (!fields.password && emailPrefix && emailPrefix.length >= 4 && lowered.includes(emailPrefix)) {
+    fields.password = "Nao use parte do e-mail na senha.";
+  }
+
+  const nameParts = String(context.name || "").split(/\s+/).filter((part) => part.length >= 4);
+  if (!fields.password && nameParts.some((part) => lowered.includes(part.toLowerCase()))) {
+    fields.password = "Nao use partes do nome na senha.";
+  }
+
+  return Object.keys(fields).length
+    ? { valid: false, error: "Validation failed", fields }
+    : { valid: true };
+}
+
 function isBlank(value) {
   return value === undefined || value === null || String(value).trim() === "";
 }
@@ -1244,6 +1611,52 @@ async function readDatabase() {
 
 async function writeDatabase(payload) {
   await databaseRepository.write(payload);
+}
+
+async function savePasswordResetToken(data, record) {
+  if (databaseRepository.savePasswordResetToken) {
+    await databaseRepository.savePasswordResetToken(record);
+    return;
+  }
+  data.passwordResetTokens = getActivePasswordResetTokens(data);
+  data.passwordResetTokens.unshift(record);
+  data.passwordResetTokens = data.passwordResetTokens.slice(0, 100);
+  await writeDatabase(data);
+}
+
+async function findPasswordResetToken(token) {
+  const tokenHash = hashToken(token);
+  if (databaseRepository.findPasswordResetToken) {
+    return databaseRepository.findPasswordResetToken(tokenHash);
+  }
+  const database = await readDatabase();
+  if (!database.exists) return null;
+  const data = database.data || {};
+  const record = getActivePasswordResetTokens(data).find((item) => item.tokenHash === tokenHash);
+  if (!record) return null;
+  const user = Array.isArray(data.users) ? data.users.find((item) => item.id === record.userId) : null;
+  return user ? { ...record, user } : null;
+}
+
+async function markPasswordResetTokenUsed(token) {
+  const tokenHash = hashToken(token);
+  if (databaseRepository.markPasswordResetTokenUsed) {
+    await databaseRepository.markPasswordResetTokenUsed(tokenHash);
+    return;
+  }
+  const database = await readDatabase();
+  if (!database.exists) return;
+  const data = database.data || {};
+  data.passwordResetTokens = getActivePasswordResetTokens(data)
+    .map((item) => item.tokenHash === tokenHash ? { ...item, usedAt: new Date().toISOString() } : item)
+    .filter((item) => !item.usedAt);
+  await writeDatabase(data);
+}
+
+function getActivePasswordResetTokens(data) {
+  const now = Date.now();
+  return (Array.isArray(data?.passwordResetTokens) ? data.passwordResetTokens : [])
+    .filter((item) => item && !item.usedAt && new Date(item.expiresAt).getTime() > now);
 }
 
 function loadEnvFile(filePath) {
@@ -1374,6 +1787,64 @@ SELECT COALESCE((
       const session = JSON.parse(content);
       sessions.set(token, session);
       return session;
+    },
+    async savePasswordResetToken(record) {
+      await this.ensureMigrations();
+      await runPsql(["-v", "ON_ERROR_STOP=1"], `
+INSERT INTO password_reset_tokens (id, user_id, tenant_id, token_hash, requested_by_ip, requested_user_agent, created_at, expires_at, used_at)
+VALUES (${sqlLiteral(record.id)}, ${sqlLiteral(record.userId)}, ${sqlLiteral(record.tenantId)}, ${sqlLiteral(record.tokenHash)}, ${sqlLiteral(record.requestedByIp)}, ${sqlLiteral(record.requestedUserAgent)}, ${sqlLiteral(record.createdAt)}::timestamptz, ${sqlLiteral(record.expiresAt)}::timestamptz, NULL)
+ON CONFLICT (token_hash) DO NOTHING;
+DELETE FROM password_reset_tokens WHERE expires_at <= now() OR used_at IS NOT NULL;
+`);
+    },
+    async findPasswordResetToken(tokenHash) {
+      await this.ensureMigrations();
+      const output = await runPsql([
+        "-t",
+        "-A",
+        "-c",
+        `
+DELETE FROM password_reset_tokens WHERE expires_at <= now() OR used_at IS NOT NULL;
+SELECT COALESCE((
+  SELECT jsonb_build_object(
+    'id', password_reset_tokens.id,
+    'userId', password_reset_tokens.user_id,
+    'tenantId', password_reset_tokens.tenant_id,
+    'tokenHash', password_reset_tokens.token_hash,
+    'createdAt', password_reset_tokens.created_at,
+    'expiresAt', password_reset_tokens.expires_at,
+    'user', jsonb_build_object(
+      'id', users.id,
+      'name', users.name,
+      'email', users.email,
+      'passwordHash', users.password_hash,
+      'role', users.role,
+      'status', users.status,
+      'tenantId', users.tenant_id
+    )
+  )::text
+  FROM password_reset_tokens
+  JOIN users ON users.id = password_reset_tokens.user_id
+  WHERE password_reset_tokens.token_hash = ${sqlLiteral(tokenHash)}
+    AND password_reset_tokens.used_at IS NULL
+    AND password_reset_tokens.expires_at > now()
+    AND users.status = 'ativo'
+  LIMIT 1
+), '');
+`
+      ]);
+      const content = output.trim();
+      return content ? JSON.parse(content) : null;
+    },
+    async markPasswordResetTokenUsed(tokenHash) {
+      await this.ensureMigrations();
+      await runPsql(["-v", "ON_ERROR_STOP=1"], `
+UPDATE password_reset_tokens
+SET used_at = now()
+WHERE token_hash = ${sqlLiteral(tokenHash)}
+  AND used_at IS NULL;
+DELETE FROM password_reset_tokens WHERE expires_at <= now() OR used_at IS NOT NULL;
+`);
     }
   };
 }
@@ -1574,7 +2045,12 @@ function getPostgresWriteSql(payload) {
   const tag = `fenix_payload_${crypto.randomBytes(8).toString("hex")}`;
   return `
 BEGIN;
-TRUNCATE notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;
+CREATE TEMP TABLE santuserp_preserved_password_reset_tokens ON COMMIT DROP AS
+SELECT *
+FROM password_reset_tokens
+WHERE expires_at > now()
+  AND used_at IS NULL;
+TRUNCATE password_reset_tokens, notification_reads, audit_logs, tasks, projects, contracts, receivables, proposals, payables, categories, suppliers, clients, users, tenants;
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
 INSERT INTO tenants (id, name, document, email, phone, status, notes)
@@ -1599,6 +2075,12 @@ SELECT
   record->>'status',
   COALESCE(NULLIF(record->>'tenantId', ''), ${sqlLiteral(defaultTenantId)})
 FROM payload, jsonb_array_elements(COALESCE(data->'users', '[]'::jsonb)) AS record;
+
+INSERT INTO password_reset_tokens (id, user_id, tenant_id, token_hash, requested_by_ip, requested_user_agent, created_at, expires_at, used_at)
+SELECT id, user_id, tenant_id, token_hash, requested_by_ip, requested_user_agent, created_at, expires_at, used_at
+FROM santuserp_preserved_password_reset_tokens
+WHERE user_id IN (SELECT id FROM users)
+  AND (tenant_id IS NULL OR tenant_id IN (SELECT id FROM tenants));
 
 WITH payload AS (SELECT $${tag}$${JSON.stringify(payload || {})}$${tag}$::jsonb AS data)
 INSERT INTO clients (id, tenant_id, type, name, document, email, phone, status, notes)
