@@ -17,6 +17,7 @@
     "backup": "node scripts/backup-postgres.js",
     "backup:retention": "node scripts/backup-postgres.js --retention-days=14",
     "monitor": "node scripts/monitor-check.js",
+    "client:ready": "node scripts/client-readiness-check.js",
     "restore:list": "node scripts/restore-postgres.js --list",
     "seed:demo": "node scripts/seed-postgres-demo.js",
     "service:start": "node scripts/santuserp-service.js start",

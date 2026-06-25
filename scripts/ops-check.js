@@ -168,6 +168,7 @@ function checkScripts() {
     "permission-test.js",
     "load-test.js",
     "release-check.js",
+    "client-readiness-check.js",
     "monitor-check.js",
     "install-backup-task.ps1"
   ];

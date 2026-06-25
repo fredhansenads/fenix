@@ -278,24 +278,28 @@ Transformar o SantusERP em produto entregavel e sustentavel.
 
 Entregas principais:
 
-- Modelo comercial.
-- Planos ou pacotes.
-- SLA.
-- Termos de uso.
-- Politica de privacidade.
-- Contrato de prestacao.
-- Processo de implantacao de novo cliente.
-- Ambiente de demonstracao.
-- Base demo segura.
-- Documentacao para usuario final.
-- Processo de suporte.
-- Processo de priorizacao de melhorias.
+- Modelo comercial. Concluido.
+- Planos ou pacotes. Concluido.
+- SLA. Concluido.
+- Termos de uso. Concluido como modelo para revisao juridica.
+- Politica de privacidade. Concluido como modelo para revisao juridica.
+- Contrato de prestacao. Concluido como estrutura para revisao juridica.
+- Processo de implantacao de novo cliente. Concluido.
+- Ambiente de demonstracao. Concluido.
+- Base demo segura. Concluido.
+- Documentacao para usuario final. Concluido.
+- Processo de suporte. Concluido.
+- Processo de priorizacao de melhorias. Concluido.
 
 Criterio de conclusao:
 
 - Novo cliente pode ser implantado com roteiro claro.
 - Suporte sabe como agir diante de problemas.
 - Existe material minimo para venda, demonstracao e operacao.
+
+Status:
+
+- Concluido.
 
 ## Ordem recomendada de implementacao
 
@@ -308,16 +312,16 @@ Criterio de conclusao:
 7. Completar funcionalidades essenciais de produto. Concluido.
 8. Ampliar testes e QA. Concluido.
 9. Implantar monitoramento. Concluido.
-10. Preparar comercializacao e suporte.
+10. Preparar comercializacao e suporte. Concluido.
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 10 - preparar comercializacao, suporte e escala**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX, funcionalidades essenciais, fluxo de QA/release e monitoramento operacional.
+A proxima etapa mais importante e expandir automacoes avancadas e iniciar assistente de IA, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX, funcionalidades essenciais, fluxo de QA/release, monitoramento operacional e pacote comercial de entrada em cliente.
 
-Primeira entrega sugerida da Etapa 10:
+Primeira entrega sugerida da proxima fase:
 
-- Modelo comercial e planos.
-- SLA e processo de suporte.
-- Termos de uso e politica de privacidade.
-- Processo de implantacao de novo cliente.
+- Motor de regras configuraveis por empresa.
+- Sugestoes automaticas de acao em financeiro, comercial e projetos.
+- Assistente executivo para leitura de indicadores.
+- Analise preditiva simples de risco, vencimentos e conversao.
 

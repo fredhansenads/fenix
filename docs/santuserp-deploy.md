@@ -143,10 +143,11 @@ Antes do deploy:
 2. Confirmar branch e commit que sera publicado.
 3. Rodar `npm run check`.
 4. Rodar `npm run monitor`.
-5. Rodar `npm run smoke`.
-6. Rodar `npm run migrate:dry`.
-7. Gerar backup com `npm run backup:retention`.
-8. Conferir `.env` do ambiente.
+5. Rodar `npm run client:ready`.
+6. Rodar `npm run smoke`.
+7. Rodar `npm run migrate:dry`.
+8. Gerar backup com `npm run backup:retention`.
+9. Conferir `.env` do ambiente.
 
 Durante o deploy:
 
@@ -161,11 +162,12 @@ Depois do deploy:
 
 1. Rodar `npm run check`.
 2. Rodar `npm run monitor`.
-3. Acessar o dominio HTTPS.
-4. Fazer login administrativo.
-5. Abrir `Configuracoes > Saude do sistema`.
-6. Validar Dashboard, Clientes, Financeiro, Projetos e Relatorios.
-7. Registrar commit, data, responsavel e observacoes da release.
+3. Rodar `npm run client:ready`.
+4. Acessar o dominio HTTPS.
+5. Fazer login administrativo.
+6. Abrir `Configuracoes > Saude do sistema`.
+7. Validar Dashboard, Clientes, Financeiro, Projetos e Relatorios.
+8. Registrar commit, data, responsavel e observacoes da release.
 
 ## 8. Rollback
 

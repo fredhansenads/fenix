@@ -78,6 +78,12 @@ Atalho equivalente:
 npm run check:full
 ```
 
+Para validar prontidao comercial e operacional para cliente:
+
+```powershell
+npm run client:ready
+```
+
 ## 3. Rodar smoke test
 
 ```powershell
@@ -201,11 +207,12 @@ Conferir:
 
 1. Rodar `npm run check`.
 2. Rodar `npm run monitor`.
-3. Rodar `npm run smoke`.
-4. Gerar backup com `npm run backup`.
-5. Iniciar `.\scripts\start-santuserp.ps1 -Open`.
-6. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
-7. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
+3. Rodar `npm run client:ready`.
+4. Rodar `npm run smoke`.
+5. Gerar backup com `npm run backup`.
+6. Iniciar `.\scripts\start-santuserp.ps1 -Open`.
+7. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
+8. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
 
 ## 11. Rotina recomendada antes de mudancas tecnicas
 
@@ -225,8 +232,9 @@ Conferir:
 4. Rodar `npm run migrate:dry`.
 5. Gerar backup com `npm run backup:retention`.
 6. Rodar `npm run monitor`.
-7. Aplicar migrations com `npm run migrate:apply`.
-8. Reiniciar com `node scripts\santuserp-service.js restart --env .env.production`.
-9. Conferir `node scripts\santuserp-service.js status`.
-10. Conferir `logs/santuserp.err.log`.
-11. Fazer login e abrir `Configuracoes > Saude do sistema`.
+7. Rodar `npm run client:ready`.
+8. Aplicar migrations com `npm run migrate:apply`.
+9. Reiniciar com `node scripts\santuserp-service.js restart --env .env.production`.
+10. Conferir `node scripts\santuserp-service.js status`.
+11. Conferir `logs/santuserp.err.log`.
+12. Fazer login e abrir `Configuracoes > Saude do sistema`.

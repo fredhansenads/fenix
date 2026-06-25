@@ -13,8 +13,11 @@ A documentacao consolidada do sistema esta em:
 - `docs/santuserp-deploy.md`
 - `docs/santuserp-qa-release.md`
 - `docs/santuserp-operacao-monitoramento.md`
+- `docs/santuserp-comercial-suporte.md`
+- `docs/santuserp-implantacao-cliente.md`
+- `docs/santuserp-guia-usuario-final.md`
 
-Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, monitoramento, status das fases, roadmap de producao e proximas etapas recomendadas.
+Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, monitoramento, comercializacao, implantacao, suporte, guia de usuario, status das fases, roadmap de producao e proximas etapas recomendadas.
 
 ## Como abrir
 
@@ -150,6 +153,12 @@ Para executar o monitor operacional de banco, backup e logs:
 npm run monitor
 ```
 
+Para verificar se o pacote minimo para cliente esta pronto:
+
+```bash
+npm run client:ready
+```
+
 Para executar a validacao completa de release:
 
 ```bash
@@ -171,6 +180,7 @@ npm run migrate:apply
 npm run backup
 npm run backup:retention
 npm run monitor
+npm run client:ready
 npm run service:status
 npm run service:start
 ```
@@ -182,6 +192,12 @@ O guia completo de ambiente local esta em `docs/santuserp-ambiente-local.md`.
 O guia de deploy, ambientes, release e rollback esta em `docs/santuserp-deploy.md`.
 
 O guia de operacao e monitoramento esta em `docs/santuserp-operacao-monitoramento.md`.
+
+O pacote comercial, implantacao e usuario final esta em:
+
+- `docs/santuserp-comercial-suporte.md`
+- `docs/santuserp-implantacao-cliente.md`
+- `docs/santuserp-guia-usuario-final.md`
 
 ## API local
 
@@ -296,4 +312,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e preparar comercializacao, suporte e escala: modelo comercial, SLA, termos, politica de privacidade, processo de implantacao, ambiente demo e documentacao para usuario final.
+A proxima etapa recomendada e expandir automacoes avancadas e iniciar assistente de IA para analise executiva, previsoes e apoio a decisao.

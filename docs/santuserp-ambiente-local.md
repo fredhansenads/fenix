@@ -63,6 +63,7 @@ npm run migrate:apply
 npm run backup
 npm run backup:retention
 npm run monitor
+npm run client:ready
 npm run restore:list
 npm run seed:demo
 npm run service:status
@@ -92,6 +93,7 @@ Principais usos:
 - `npm run backup`: gera backup SQL local em `backups/`.
 - `npm run backup:retention`: gera backup e remove backups locais acima da retencao configurada.
 - `npm run monitor`: verifica PostgreSQL, backup recente e logs operacionais.
+- `npm run client:ready`: verifica documentacao, scripts e prontidao minima para demonstracao, venda, implantacao e suporte.
 - `npm run restore:list`: lista backups disponiveis.
 - `npm run seed:demo`: recria dados demonstrativos no PostgreSQL.
 - `npm run service:*`: controla o processo em background por PowerShell.
@@ -109,6 +111,7 @@ Antes de salvar uma etapa importante:
 
 ```powershell
 npm run check:full
+npm run client:ready
 git status --short
 ```
 

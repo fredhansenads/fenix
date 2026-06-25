@@ -4,7 +4,7 @@
 
 O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
-O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance, melhorias de UX para cliente real, funcionalidades essenciais de produto e base operacional de monitoramento.
+O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance, melhorias de UX para cliente real, funcionalidades essenciais de produto, base operacional de monitoramento e pacote inicial de comercializacao, implantacao e suporte.
 
 A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
 
@@ -65,6 +65,9 @@ docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
 docs/santuserp-deploy.md               Guia de deploy e ambientes
 docs/santuserp-qa-release.md           Checklist de QA e release
 docs/santuserp-operacao-monitoramento.md Guia de operacao e monitoramento
+docs/santuserp-comercial-suporte.md    Comercializacao, suporte, SLA e modelos contratuais
+docs/santuserp-implantacao-cliente.md  Roteiro de implantacao de novo cliente
+docs/santuserp-guia-usuario-final.md   Guia para usuarios finais
 scripts/start-santuserp.ps1            Inicializador local Windows
 scripts/santuserp-service.ps1          Start, stop, restart e status em background
 scripts/santuserp-service.js           Controlador de servico em background
@@ -79,6 +82,7 @@ scripts/permission-test.js         Teste de permissoes e multiempresa
 scripts/load-test.js               Teste de carga basico
 scripts/release-check.js           Validacao completa de release
 scripts/ops-check.js               Checklist operacional automatizado
+scripts/client-readiness-check.js   Prontidao comercial e operacional para cliente
 ```
 
 Arquivos sensiveis e dados locais nao devem ir para o Git:
@@ -438,6 +442,41 @@ O servidor tambem grava logs estruturados em:
 logs/santuserp-structured.log
 ```
 
+## 12.2. Comercializacao, implantacao e suporte
+
+Pacote comercial e de atendimento:
+
+```text
+docs/santuserp-comercial-suporte.md
+docs/santuserp-implantacao-cliente.md
+docs/santuserp-guia-usuario-final.md
+```
+
+Esse pacote cobre:
+
+- Modelo comercial e planos sugeridos.
+- Processo comercial.
+- Modelo de proposta.
+- SLA inicial.
+- Processo de suporte.
+- Priorizacao de melhorias.
+- Estrutura de termos de uso, politica de privacidade e contrato para revisao juridica.
+- Ambiente de demonstracao.
+- Roteiro de implantacao.
+- Guia de usuario final.
+
+Checklist automatizado:
+
+```powershell
+npm run client:ready
+```
+
+O resultado fica em:
+
+```text
+runtime/client-readiness.json
+```
+
 ## 13. Deploy e ambientes
 
 O guia completo esta em:
@@ -538,6 +577,7 @@ Atalhos `npm` disponiveis:
 - `npm run backup`
 - `npm run backup:retention`
 - `npm run monitor`
+- `npm run client:ready`
 - `npm run restore:list`
 - `npm run seed:demo`
 
@@ -756,6 +796,7 @@ Fase 2 concluida no escopo planejado:
 - Funcionalidades essenciais de produto com convites assistidos, painel administrativo do cliente, notificacoes/automacoes configuraveis e exportacoes profissionais.
 - Qualidade de release com smoke, permissoes, carga basica, checklist completo e QA documentado.
 - Operacao e monitoramento com logs estruturados, health check ampliado, alertas simples de banco/backup/logs, backup com retencao, script de agendamento e teste periodico de restauracao.
+- Comercializacao, suporte e escala com modelo comercial, planos, SLA, termos/privacidade/contrato para revisao juridica, roteiro de implantacao, ambiente demo, guia de usuario final, suporte e priorizacao de melhorias.
 
 ## 22. Status da Fase 3
 
@@ -770,9 +811,9 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Preparar comercializacao, suporte e escala.
-2. Expandir automacoes com regras configuraveis avancadas.
-3. Iniciar assistente de IA para analise executiva.
+1. Expandir automacoes com regras configuraveis avancadas.
+2. Iniciar assistente de IA para analise executiva.
+3. Planejar integracoes externas e portal do cliente.
 
 ## 24. Criterios de sucesso
 
@@ -787,4 +828,5 @@ O projeto e considerado saudavel quando:
 - Auditoria registra acoes relevantes.
 - Monitor operacional informa banco, backup e logs.
 - Backups recentes existem e podem ser testados em modo simulacao.
+- O pacote comercial e operacional para cliente passa em `npm run client:ready`.
 - Alteracoes sao salvas no Git e enviadas ao GitHub.

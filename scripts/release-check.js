@@ -28,6 +28,10 @@ const steps = [
     command: [process.execPath, [path.join("scripts", "monitor-check.js"), "--fail-on-falha"]]
   },
   {
+    name: "Prontidao para cliente",
+    command: [process.execPath, [path.join("scripts", "client-readiness-check.js"), "--skip-monitor"]]
+  },
+  {
     name: "Smoke test",
     command: [process.execPath, [path.join("scripts", "smoke-test.js")]]
   },
