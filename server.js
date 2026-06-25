@@ -1284,11 +1284,27 @@ function sanitizeCompanyProfile(tenant) {
 
 function normalizeTenantSettings(settings = {}) {
   const defaultPageSize = Number(settings.defaultPageSize || 10);
+  const notifications = settings.notifications && typeof settings.notifications === "object" ? settings.notifications : {};
+  const automations = settings.automations && typeof settings.automations === "object" ? settings.automations : {};
   return {
     onboardingCompleted: Boolean(settings.onboardingCompleted),
     defaultPageSize: [10, 20, 50].includes(defaultPageSize) ? defaultPageSize : 10,
     compactTables: Boolean(settings.compactTables),
-    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : "executivo"
+    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : "executivo",
+    notifications: {
+      finance: notifications.finance !== false,
+      commercial: notifications.commercial !== false,
+      operations: notifications.operations !== false,
+      contracts: notifications.contracts !== false,
+      warningDays: clampNumber(Number(notifications.warningDays || 7), 1, 30)
+    },
+    automations: {
+      finance: automations.finance !== false,
+      commercial: automations.commercial !== false,
+      contracts: automations.contracts !== false,
+      proposalWarningDays: clampNumber(Number(automations.proposalWarningDays || 7), 1, 30),
+      contractWarningDays: clampNumber(Number(automations.contractWarningDays || 15), 1, 60)
+    }
   };
 }
 

@@ -57,6 +57,7 @@ No Windows, tambem e possivel usar o inicializador local:
 - Empresas e isolamento multiempresa
 - Seguranca/compliance inicial: senha forte, reset de senha, auditoria de autenticacao e LGPD inicial
 - UX para cliente real: onboarding, perfil da empresa, preferencias, listas paginadas e guia rapido
+- Produto essencial: convites assistidos, painel administrativo, notificacoes/automacoes configuraveis e exportacoes profissionais
 - Configuracoes administrativas
 - Listas responsivas com leitura otimizada no mobile
 
@@ -126,7 +127,7 @@ Para rodar uma validacao automatizada basica do sistema:
 node scripts/smoke-test.js
 ```
 
-O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, perfil/preferencias da empresa, criacao/edicao/exclusao de cliente, auditoria paginada, notificacoes lidas, reset de senha e rotas iniciais de compliance.
+O teste sobe uma API temporaria na porta `4193`, faz login, valida PostgreSQL, bootstrap, perfil/preferencias da empresa, criacao/edicao/exclusao de cliente, auditoria paginada, notificacoes lidas, reset de senha, rotas iniciais de compliance e configuracoes funcionais.
 
 Para conferir ambiente, banco, backups e scripts operacionais:
 
@@ -189,7 +190,7 @@ Perfil e preferencias da empresa:
 - `GET /api/company-profile`
 - `PUT /api/company-profile`
 
-Essas rotas exigem perfil `admin` ou `gestor` e permitem manter dados da empresa, onboarding, paginacao padrao, tabelas compactas e foco do dashboard.
+Essas rotas exigem perfil `admin` ou `gestor` e permitem manter dados da empresa, onboarding, paginacao padrao, tabelas compactas, foco do dashboard, notificacoes e automacoes.
 
 O servidor mantem compatibilidade com o estado completo em:
 
@@ -273,4 +274,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e completar funcionalidades essenciais de produto: convites de usuarios, configuracoes funcionais do cliente, relatorios profissionais e automacoes configuraveis.
+A proxima etapa recomendada e criar testes e qualidade de release: cobertura por modulo, permissoes, multiempresa, QA de release e teste de carga basico.

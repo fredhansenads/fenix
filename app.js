@@ -42,7 +42,21 @@ const defaultTenantSettings = {
   onboardingCompleted: false,
   defaultPageSize: 10,
   compactTables: false,
-  dashboardFocus: "executivo"
+  dashboardFocus: "executivo",
+  notifications: {
+    finance: true,
+    commercial: true,
+    operations: true,
+    contracts: true,
+    warningDays: 7
+  },
+  automations: {
+    finance: true,
+    commercial: true,
+    contracts: true,
+    proposalWarningDays: 7,
+    contractWarningDays: 15
+  }
 };
 
 const actionPermissions = {
@@ -222,12 +236,33 @@ function normalizeState(savedState) {
 
 function normalizeTenantSettings(settings = {}) {
   const pageSize = Number(settings.defaultPageSize || defaultTenantSettings.defaultPageSize);
+  const notifications = settings.notifications || {};
+  const automations = settings.automations || {};
   return {
     onboardingCompleted: Boolean(settings.onboardingCompleted),
     defaultPageSize: [10, 20, 50].includes(pageSize) ? pageSize : defaultTenantSettings.defaultPageSize,
     compactTables: Boolean(settings.compactTables),
-    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : defaultTenantSettings.dashboardFocus
+    dashboardFocus: ["executivo", "financeiro", "operacional"].includes(settings.dashboardFocus) ? settings.dashboardFocus : defaultTenantSettings.dashboardFocus,
+    notifications: {
+      finance: notifications.finance !== false,
+      commercial: notifications.commercial !== false,
+      operations: notifications.operations !== false,
+      contracts: notifications.contracts !== false,
+      warningDays: clamp(Number(notifications.warningDays || defaultTenantSettings.notifications.warningDays), 1, 30)
+    },
+    automations: {
+      finance: automations.finance !== false,
+      commercial: automations.commercial !== false,
+      contracts: automations.contracts !== false,
+      proposalWarningDays: clamp(Number(automations.proposalWarningDays || defaultTenantSettings.automations.proposalWarningDays), 1, 30),
+      contractWarningDays: clamp(Number(automations.contractWarningDays || defaultTenantSettings.automations.contractWarningDays), 1, 60)
+    }
   };
+}
+
+function clamp(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
 }
 
 function saveState(options = {}) {
@@ -1151,10 +1186,11 @@ function renderUpcomingFinancials(items) {
 
 function buildNotifications() {
   const todayValue = today();
-  const warningLimit = addDays(7);
+  const settings = getTenantSettings().notifications;
+  const warningLimit = addDays(settings.warningDays);
   const notifications = [];
 
-  state.payables
+  if (settings.finance) state.payables
     .filter((item) => item.status === "pendente" && item.dueDate)
     .forEach((item) => {
       if (item.dueDate < todayValue) {
@@ -1180,7 +1216,7 @@ function buildNotifications() {
       }
     });
 
-  state.receivables
+  if (settings.finance) state.receivables
     .filter((item) => item.status === "pendente" && item.dueDate)
     .forEach((item) => {
       if (item.dueDate < todayValue) {
@@ -1206,7 +1242,7 @@ function buildNotifications() {
       }
     });
 
-  state.tasks
+  if (settings.operations) state.tasks
     .filter((item) => !["concluida", "cancelada"].includes(item.status) && item.dueDate)
     .forEach((item) => {
       if (item.dueDate < todayValue) {
@@ -1232,7 +1268,7 @@ function buildNotifications() {
       }
     });
 
-  state.proposals
+  if (settings.commercial) state.proposals
     .filter((item) => ["rascunho", "enviada"].includes(item.status) && item.validUntil)
     .forEach((item) => {
       if (item.validUntil < todayValue) {
@@ -1258,7 +1294,7 @@ function buildNotifications() {
       }
     });
 
-  state.contracts
+  if (settings.contracts) state.contracts
     .filter((item) => ["ativo", "suspenso"].includes(item.status) && item.endDate)
     .forEach((item) => {
       if (item.endDate < todayValue) {
@@ -1304,12 +1340,14 @@ function getUnreadNotifications(notifications = buildNotifications()) {
 
 function buildAutomationRules() {
   const todayValue = today();
-  const weekLimit = addDays(7);
-  const contractLimit = addDays(15);
+  const settings = getTenantSettings().automations;
+  const weekLimit = addDays(settings.proposalWarningDays);
+  const contractLimit = addDays(settings.contractWarningDays);
 
   return [
     {
       id: "finance-overdue",
+      enabled: settings.finance,
       area: "Financeiro",
       tone: "danger",
       title: "Gerar tarefas para contas vencidas",
@@ -1325,6 +1363,7 @@ function buildAutomationRules() {
     },
     {
       id: "commercial-followup",
+      enabled: settings.commercial,
       area: "Comercial",
       tone: "warning",
       title: "Gerar tarefas para propostas criticas",
@@ -1335,6 +1374,7 @@ function buildAutomationRules() {
     },
     {
       id: "contract-review",
+      enabled: settings.contracts,
       area: "Contratos",
       tone: "warning",
       title: "Gerar tarefas para revisao contratual",
@@ -1344,6 +1384,14 @@ function buildAutomationRules() {
         .map((item) => automationItem("contracts", item, `Revisar contrato: ${item.title}`, `Contrato ${item.contractNumber || item.title} com termino em ${formatDate(item.endDate)} e valor de ${money(item.amount)}.`, "media", item.endDate < todayValue ? todayValue : item.endDate))
     }
   ].map((rule) => {
+    if (!rule.enabled) {
+      return {
+        ...rule,
+        pendingItems: [],
+        generatedCount: 0,
+        disabledBySettings: true
+      };
+    }
     const pendingItems = rule.items.filter((item) => !automationTaskExists(item.key));
     return {
       ...rule,
@@ -2425,7 +2473,7 @@ function exportReportCsv(type, reports = [], period = getReportPeriod()) {
     toast("Nao ha dados para exportar.");
     return;
   }
-  downloadCsv(`santuserp-relatorio-${type}.csv`, rows);
+  downloadCsv(`${buildExportBaseName(`relatorio-${type}`, period)}.csv`, rows);
   toast("Relatorio exportado.");
 }
 
@@ -2434,6 +2482,7 @@ function buildReportExportRows(type, reports, period = getReportPeriod()) {
   if (type === "summary") {
     return reports.map((report) => ({
       secao: "Resumo executivo",
+      empresa: getCurrentTenant()?.name || "SANTUS",
       area: report.title,
       indicador: report.title,
       valor: report.value,
@@ -2446,6 +2495,7 @@ function buildReportExportRows(type, reports, period = getReportPeriod()) {
   if (type === "indicators") {
     return reports.flatMap((report) => report.rows.map(([area, indicator, value, reading]) => ({
       secao: "Indicadores",
+      empresa: getCurrentTenant()?.name || "SANTUS",
       area,
       indicador: indicator,
       valor: value,
@@ -2474,8 +2524,9 @@ function buildReportExportRows(type, reports, period = getReportPeriod()) {
   if (!report) return [];
 
   return report.rows.map(([area, indicator, value, reading]) => ({
-    secao: report.title,
-    area,
+      secao: report.title,
+      empresa: getCurrentTenant()?.name || "SANTUS",
+      area,
     indicador: indicator,
     valor: value,
     leitura: reading,
@@ -2489,6 +2540,7 @@ function buildFinancialDueRows(period = getReportPeriod()) {
     .filter((item) => item.status === "pendente" && isDateInPeriod(item.dueDate, period))
     .map((item) => ({
       secao: "Vencimentos",
+      empresa: getCurrentTenant()?.name || "SANTUS",
       area: "Financeiro",
       indicador: "Conta a pagar",
       valor: money(item.amount),
@@ -2500,6 +2552,7 @@ function buildFinancialDueRows(period = getReportPeriod()) {
     .filter((item) => item.status === "pendente" && isDateInPeriod(item.dueDate, period))
     .map((item) => ({
       secao: "Vencimentos",
+      empresa: getCurrentTenant()?.name || "SANTUS",
       area: "Financeiro",
       indicador: "Conta a receber",
       valor: money(item.amount),
@@ -2516,6 +2569,7 @@ function buildNotificationExportRows(period = getReportPeriod()) {
     .filter((notification) => isDateInPeriod(notification.date, period))
     .map((notification) => ({
     secao: "Notificacoes",
+    empresa: getCurrentTenant()?.name || "SANTUS",
     area: notification.area,
     indicador: notification.title,
     valor: notification.tone === "danger" ? "Critico" : "Atencao",
@@ -2677,8 +2731,10 @@ function renderAutomations() {
 }
 
 function renderAutomationRule(rule, context) {
-  const disabled = !rule.pendingItems.length || !context.canCreateTasks || !context.hasProject;
-  const reason = !context.canCreateTasks
+  const disabled = rule.disabledBySettings || !rule.pendingItems.length || !context.canCreateTasks || !context.hasProject;
+  const reason = rule.disabledBySettings
+    ? "Regra desativada nas configuracoes da empresa."
+    : !context.canCreateTasks
     ? "Seu perfil pode visualizar esta automacao, mas nao pode criar tarefas."
     : !context.hasProject
       ? "Cadastre um projeto antes de gerar tarefas automaticas."
@@ -3266,6 +3322,52 @@ function renderSettings() {
               <input type="checkbox" name="onboardingCompleted" ${settings.onboardingCompleted ? "checked" : ""} />
               <span>Onboarding concluido</span>
             </label>
+            <div class="full settings-divider">
+              <strong>Notificacoes</strong>
+            </div>
+            <label class="preference-toggle">
+              <input type="checkbox" name="notifyFinance" ${settings.notifications.finance ? "checked" : ""} />
+              <span>Financeiro</span>
+            </label>
+            <label class="preference-toggle">
+              <input type="checkbox" name="notifyCommercial" ${settings.notifications.commercial ? "checked" : ""} />
+              <span>Comercial</span>
+            </label>
+            <label class="preference-toggle">
+              <input type="checkbox" name="notifyOperations" ${settings.notifications.operations ? "checked" : ""} />
+              <span>Operacional</span>
+            </label>
+            <label class="preference-toggle">
+              <input type="checkbox" name="notifyContracts" ${settings.notifications.contracts ? "checked" : ""} />
+              <span>Contratos</span>
+            </label>
+            <label>
+              Antecedencia de alertas
+              <input name="notificationWarningDays" type="number" min="1" max="30" value="${settings.notifications.warningDays}" />
+            </label>
+            <div class="full settings-divider">
+              <strong>Automacoes</strong>
+            </div>
+            <label class="preference-toggle">
+              <input type="checkbox" name="automationFinance" ${settings.automations.finance ? "checked" : ""} />
+              <span>Financeiro</span>
+            </label>
+            <label class="preference-toggle">
+              <input type="checkbox" name="automationCommercial" ${settings.automations.commercial ? "checked" : ""} />
+              <span>Comercial</span>
+            </label>
+            <label class="preference-toggle">
+              <input type="checkbox" name="automationContracts" ${settings.automations.contracts ? "checked" : ""} />
+              <span>Contratos</span>
+            </label>
+            <label>
+              Prazo propostas
+              <input name="proposalWarningDays" type="number" min="1" max="30" value="${settings.automations.proposalWarningDays}" />
+            </label>
+            <label>
+              Prazo contratos
+              <input name="contractWarningDays" type="number" min="1" max="60" value="${settings.automations.contractWarningDays}" />
+            </label>
             <div class="full toolbar-actions">
               <button type="submit">Salvar preferencias</button>
             </div>
@@ -3289,6 +3391,46 @@ function renderSettings() {
             <button type="button" class="secondary" data-goto="${step.target}">${step.action}</button>
           </article>
         `).join("")}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Painel administrativo do cliente</h3>
+          <span class="panel-subtitle">Resumo de conta, acesso e operacao</span>
+        </div>
+      </div>
+      <div class="panel-body">${renderClientAdminPanel()}</div>
+    </section>
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h3>Convite de usuario</h3>
+          <span class="panel-subtitle">Cria acesso inicial com senha provisoria forte</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <form class="form-grid" data-user-invite novalidate>
+          <div class="form-alert full hidden" data-form-alert></div>
+          <label>
+            Nome
+            <input name="name" required />
+          </label>
+          <label>
+            E-mail
+            <input name="email" type="email" required />
+          </label>
+          <label>
+            Perfil
+            <select name="role">
+              ${Object.entries(roleLabels).filter(([role]) => role !== "admin").map(([role, label]) => `<option value="${role}">${label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="full toolbar-actions">
+            <button type="submit">Gerar convite</button>
+          </div>
+        </form>
+        <div class="invite-result hidden" data-invite-result></div>
       </div>
     </section>
     <section class="panel">
@@ -3340,6 +3482,7 @@ function renderSettings() {
   `;
   content.querySelector("[data-company-profile]").addEventListener("submit", saveCompanyProfileForm);
   content.querySelector("[data-company-preferences]").addEventListener("submit", saveCompanyPreferencesForm);
+  content.querySelector("[data-user-invite]").addEventListener("submit", createUserInvite);
   document.querySelector("#seedButton").addEventListener("click", () => {
     state = structuredClone(initialData);
     hydrateReferences();
@@ -3353,6 +3496,24 @@ function renderSettings() {
   document.querySelector("#complianceAnonymizeButton").addEventListener("click", anonymizeComplianceClient);
   bindGoToButtons();
   loadHealthStatus();
+}
+
+function renderClientAdminPanel() {
+  const activeUsers = state.users.filter((user) => user.status === "ativo").length;
+  const activeClients = state.clients.filter((client) => client.status === "ativo").length;
+  const openProjects = state.projects.filter((project) => ["planejado", "em_andamento", "pausado"].includes(project.status)).length;
+  const unreadNotifications = getUnreadNotifications().length;
+  const settings = getTenantSettings();
+  return `
+    <div class="health-grid">
+      <div class="health-item"><span>Usuarios ativos</span><strong>${activeUsers}</strong></div>
+      <div class="health-item"><span>Clientes ativos</span><strong>${activeClients}</strong></div>
+      <div class="health-item"><span>Projetos abertos</span><strong>${openProjects}</strong></div>
+      <div class="health-item"><span>Notificacoes</span><strong>${unreadNotifications}</strong></div>
+      <div class="health-item"><span>Automacoes</span><strong>${[settings.automations.finance, settings.automations.commercial, settings.automations.contracts].filter(Boolean).length}/3</strong></div>
+      <div class="health-item"><span>Alertas</span><strong>${[settings.notifications.finance, settings.notifications.commercial, settings.notifications.operations, settings.notifications.contracts].filter(Boolean).length}/4</strong></div>
+    </div>
+  `;
 }
 
 async function saveCompanyProfileForm(event) {
@@ -3389,7 +3550,21 @@ async function saveCompanyPreferencesForm(event) {
       defaultPageSize: Number(formData.get("defaultPageSize") || 10),
       dashboardFocus: String(formData.get("dashboardFocus") || "executivo"),
       compactTables: formData.has("compactTables"),
-      onboardingCompleted: formData.has("onboardingCompleted")
+      onboardingCompleted: formData.has("onboardingCompleted"),
+      notifications: {
+        finance: formData.has("notifyFinance"),
+        commercial: formData.has("notifyCommercial"),
+        operations: formData.has("notifyOperations"),
+        contracts: formData.has("notifyContracts"),
+        warningDays: Number(formData.get("notificationWarningDays") || 7)
+      },
+      automations: {
+        finance: formData.has("automationFinance"),
+        commercial: formData.has("automationCommercial"),
+        contracts: formData.has("automationContracts"),
+        proposalWarningDays: Number(formData.get("proposalWarningDays") || 7),
+        contractWarningDays: Number(formData.get("contractWarningDays") || 15)
+      }
     });
     if (!result) {
       toast(apiErrorMessage("Nao foi possivel salvar as preferencias."));
@@ -3402,6 +3577,64 @@ async function saveCompanyPreferencesForm(event) {
     toast("Preferencias salvas.");
     renderSettings();
   });
+}
+
+async function createUserInvite(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const resultBox = content.querySelector("[data-invite-result]");
+  const formData = new FormData(form);
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const role = String(formData.get("role") || "colaborador");
+
+  if (!name || !email) {
+    showFormError(form, "Nome e e-mail sao obrigatorios para gerar convite.");
+    return;
+  }
+  if (state.users.some((user) => String(user.email || "").toLowerCase() === email)) {
+    showFormError(form, "Ja existe um usuario com este e-mail.");
+    return;
+  }
+
+  const password = generateTemporaryPassword();
+  const user = {
+    tenantId: getCurrentTenant()?.id || state.session?.tenantId || "tenant_santus",
+    name,
+    email,
+    password,
+    role,
+    status: "ativo"
+  };
+
+  await withBusyButton(form.querySelector('button[type="submit"]'), "Gerando...", async () => {
+    const saved = await saveRecordToApi("users", user, false);
+    if (!saved) {
+      showFormError(form, apiErrorMessage("Nao foi possivel gerar o convite."));
+      return;
+    }
+    state.users.push(saved);
+    saveState({ syncApi: false });
+    form.reset();
+    resultBox.classList.remove("hidden");
+    resultBox.innerHTML = `
+      <strong>Convite pronto</strong>
+      <p>Envie estes dados por um canal seguro e oriente a troca de senha no primeiro acesso.</p>
+      <dl>
+        <dt>URL</dt><dd>${escapeHtml(location.origin || "http://127.0.0.1:4173")}</dd>
+        <dt>E-mail</dt><dd>${escapeHtml(email)}</dd>
+        <dt>Senha provisoria</dt><dd>${escapeHtml(password)}</dd>
+        <dt>Perfil</dt><dd>${escapeHtml(roleLabels[role] || role)}</dd>
+      </dl>
+    `;
+    toast("Convite gerado.");
+  });
+}
+
+function generateTemporaryPassword() {
+  const chunk = Math.random().toString(36).slice(2, 8);
+  const digits = String(Math.floor(1000 + Math.random() * 9000));
+  return `Acesso#${digits}${chunk}Z`;
 }
 
 async function exportComplianceData() {
@@ -3498,8 +3731,26 @@ function exportCsv(collection, schemaId = "") {
     toast("Nao ha dados para exportar.");
     return;
   }
-  downloadCsv(`santuserp-${collection}.csv`, rows);
+  downloadCsv(`${buildExportBaseName(collection)}.csv`, rows.map((row) => ({
+    empresa: getCurrentTenant()?.name || "SANTUS",
+    exportado_em: new Date().toISOString(),
+    ...row
+  })));
   toast("Arquivo CSV exportado.");
+}
+
+function buildExportBaseName(name, period = getReportPeriod()) {
+  const tenant = sanitizeFilename(getCurrentTenant()?.name || "santus");
+  const from = period?.from || "inicio";
+  const to = period?.to || today();
+  return `santuserp-${tenant}-${sanitizeFilename(name)}-${from}-${to}`;
+}
+
+function sanitizeFilename(value) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "arquivo";
 }
 
 function downloadCsv(filename, rows) {

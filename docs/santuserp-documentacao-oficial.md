@@ -4,7 +4,7 @@
 
 O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
-O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance e melhorias de UX para cliente real.
+O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance, melhorias de UX para cliente real e funcionalidades essenciais de produto.
 
 A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
 
@@ -108,6 +108,9 @@ backups/*.dump
 - Compliance e LGPD inicial.
 - Onboarding inicial.
 - Perfil e preferencias da empresa.
+- Convite assistido de usuarios.
+- Notificacoes e automacoes configuraveis.
+- Painel administrativo do cliente.
 
 ## 6. Perfis de usuario
 
@@ -199,6 +202,8 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Indicadores cadastrais.
 - Filtro por periodo.
 - Exportacao CSV.
+- Exportacoes com nome padronizado por empresa, relatorio e periodo.
+- Metadados de empresa e data de geracao nos arquivos exportados.
 
 ### Notificacoes
 
@@ -209,6 +214,8 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Contratos vencidos ou proximos do vencimento.
 - Marcar como lida individualmente ou em lote.
 - Contador superior apenas para notificacoes nao lidas.
+- Categorias de notificacao configuraveis por empresa.
+- Antecedencia configuravel para alertas preventivos.
 
 ### Automacoes
 
@@ -217,6 +224,8 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Geracao automatica de tarefas de acompanhamento.
 - Marcador interno de automacao para evitar tarefas duplicadas.
 - Leitura de itens ja automatizados e itens ainda pendentes.
+- Regras de automacao ativadas/desativadas por empresa.
+- Prazos configuraveis para follow-up comercial e revisao contratual.
 
 ### Historico de atividades
 
@@ -232,6 +241,9 @@ As permissoes sao aplicadas no frontend e tambem na API. Tentativas nao autoriza
 - Roadmap modular.
 - Perfil da empresa.
 - Preferencias de experiencia por empresa.
+- Preferencias funcionais de notificacoes e automacoes.
+- Convite assistido de usuarios com senha provisoria forte.
+- Painel administrativo do cliente.
 - Guia rapido de configuracao inicial.
 - Exportacao JSON de dados da empresa para atendimento LGPD.
 - Anonimizacao controlada de cliente mediante confirmacao explicita.
@@ -581,7 +593,7 @@ A exportacao retorna JSON com os dados visiveis para a sessao atual. A anonimiza
 
 Restritas a `admin` e `gestor`.
 
-Essas rotas permitem consultar e atualizar dados da empresa da sessao, incluindo nome, documento, contato, observacoes e preferencias de experiencia. As preferencias atuais cobrem onboarding concluido, registros por pagina, tabelas compactas e foco do dashboard.
+Essas rotas permitem consultar e atualizar dados da empresa da sessao, incluindo nome, documento, contato, observacoes e preferencias de experiencia. As preferencias atuais cobrem onboarding concluido, registros por pagina, tabelas compactas, foco do dashboard, categorias de notificacao, antecedencia de alertas e regras de automacao.
 
 ### Notificacoes lidas
 
@@ -609,6 +621,7 @@ Restrita a `admin` e `gestor`.
 - Login, logout, falha de login e reset de senha sao registrados na auditoria.
 - Exportacao LGPD e anonimizacao de cliente exigem perfil `admin` ou `gestor`.
 - Perfil e preferencias da empresa exigem perfil `admin` ou `gestor`.
+- Convites assistidos criam usuarios vinculados a empresa da sessao e devem ser enviados por canal seguro.
 - Respostas publicas nao retornam senha nem hash.
 - Valores financeiros devem ser maiores que zero.
 - Datas devem usar formato `AAAA-MM-DD`.
@@ -686,6 +699,7 @@ Fase 2 concluida no escopo planejado:
 - Deploy e ambientes documentados com modelos de `.env`, script de servico, checklist de release e rollback.
 - Seguranca/compliance inicial com senha forte, reset temporario, auditoria de autenticacao, rate limit e rotas LGPD.
 - UX para cliente real com onboarding, perfil da empresa, preferencias, guia rapido, paginacao de listas e feedback de salvamento.
+- Funcionalidades essenciais de produto com convites assistidos, painel administrativo do cliente, notificacoes/automacoes configuraveis e exportacoes profissionais.
 
 ## 22. Status da Fase 3
 
@@ -700,8 +714,8 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Completar funcionalidades essenciais de produto.
-2. Expandir automacoes com regras configuraveis.
+1. Criar testes e qualidade de release.
+2. Expandir automacoes com regras configuraveis avancadas.
 3. Iniciar assistente de IA para analise executiva.
 
 ## 24. Criterios de sucesso

@@ -70,11 +70,27 @@ async function main() {
         onboardingCompleted: true,
         defaultPageSize: 20,
         compactTables: true,
-        dashboardFocus: "financeiro"
+        dashboardFocus: "financeiro",
+        notifications: {
+          finance: true,
+          commercial: false,
+          operations: true,
+          contracts: true,
+          warningDays: 10
+        },
+        automations: {
+          finance: true,
+          commercial: false,
+          contracts: true,
+          proposalWarningDays: 9,
+          contractWarningDays: 20
+        }
       }
     }
   });
   assert(updatedCompany.company?.settings?.defaultPageSize === 20, "Preferencias da empresa nao foram atualizadas.");
+  assert(updatedCompany.company?.settings?.notifications?.commercial === false, "Preferencias de notificacao nao foram atualizadas.");
+  assert(updatedCompany.company?.settings?.automations?.contractWarningDays === 20, "Preferencias de automacao nao foram atualizadas.");
   await request("/api/company-profile", {
     method: "PUT",
     headers,

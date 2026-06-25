@@ -13,6 +13,7 @@ Status geral atual:
 - Etapa 4 deste roadmap concluida: ambientes documentados, modelos de `.env`, processo de servico, release, rollback e exigencia de PostgreSQL em producao.
 - Etapa 5 deste roadmap concluida como entrega inicial: politica de senha forte, recuperacao de senha com token temporario, auditoria de login/logout/falhas, rate limit em recuperacao e rotas LGPD para exportacao e anonimizacao controlada.
 - Etapa 6 deste roadmap concluida: onboarding inicial, perfil da empresa, preferencias por empresa, listas paginadas, guia rapido e feedback visual de salvamento.
+- Etapa 7 deste roadmap concluida: convites assistidos de usuarios, configuracoes funcionais por empresa, relatorios/exportacoes profissionais, notificacoes e automacoes configuraveis e painel administrativo do cliente.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -190,23 +191,27 @@ Fechar lacunas funcionais esperadas por clientes pagantes.
 
 Entregas principais:
 
-- Recuperacao de senha.
-- Perfil da empresa.
-- Configuracoes do cliente.
-- Usuarios por empresa.
-- Convite de usuarios.
-- Logs de acesso.
-- Relatorios profissionais.
-- Exportacao com filtros e nomes padronizados.
-- Automacoes configuraveis.
-- Notificacoes configuraveis.
-- Painel administrativo do cliente.
+- Recuperacao de senha. Concluida na Etapa 5.
+- Perfil da empresa. Concluido na Etapa 6.
+- Configuracoes do cliente. Concluidas com preferencias visuais, notificacoes e automacoes.
+- Usuarios por empresa. Concluido pelo modelo multiempresa e rotas escopadas.
+- Convite de usuarios. Concluido como convite assistido com senha provisoria forte.
+- Logs de acesso. Concluidos na auditoria de autenticacao e historico.
+- Relatorios profissionais. Concluidos com metadados de empresa, periodo e nomes padronizados.
+- Exportacao com filtros e nomes padronizados. Concluida em relatorios e listas.
+- Automacoes configuraveis. Concluidas por empresa.
+- Notificacoes configuraveis. Concluidas por empresa.
+- Painel administrativo do cliente. Concluido em Configuracoes.
 
 Criterio de conclusao:
 
 - Cliente consegue administrar sua propria conta.
 - Gestores conseguem extrair informacoes sem depender do desenvolvedor.
 - Automacoes podem ser ajustadas sem editar codigo.
+
+Status:
+
+- Concluido.
 
 ## 8. Criar testes e qualidade de release
 
@@ -291,19 +296,19 @@ Criterio de conclusao:
 4. Preparar deploy/homologacao/producao. Concluido.
 5. Reforcar compliance e auditoria. Concluido como base inicial.
 6. Melhorar UX/onboarding. Concluido.
-7. Completar funcionalidades essenciais de produto.
+7. Completar funcionalidades essenciais de produto. Concluido.
 8. Ampliar testes e QA.
 9. Implantar monitoramento.
 10. Preparar comercializacao e suporte.
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 7 - completar funcionalidades essenciais de produto**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial e experiencia mais adequada para uso por cliente real.
+A proxima etapa mais importante e a **Etapa 8 - criar testes e qualidade de release**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX para cliente real e funcionalidades essenciais de produto.
 
-Primeira entrega sugerida da Etapa 7:
+Primeira entrega sugerida da Etapa 8:
 
-- Convite de usuarios por empresa.
-- Configuracoes funcionais do cliente alem das preferencias visuais.
-- Relatorios profissionais com modelos/exportacoes mais consistentes.
-- Automacoes configuraveis por empresa.
+- Organizar testes automatizados por modulo.
+- Ampliar testes de permissao e multiempresa.
+- Criar checklist de QA por release.
+- Preparar teste de carga basico.
 
