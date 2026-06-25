@@ -4,7 +4,7 @@
 
 O SantusERP e o ERP web da SANTUS. O objetivo do sistema e centralizar a gestao administrativa, financeira, comercial, operacional e estrategica da empresa em uma base unica, com processos organizados, rastreabilidade, indicadores e apoio a decisao.
 
-O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance, melhorias de UX para cliente real e funcionalidades essenciais de produto.
+O sistema esta em evolucao por fases. A versao atual cobre o MVP e parte relevante da Fase 2, incluindo autenticacao, permissoes, cadastros principais, financeiro, propostas, contratos, projetos, tarefas, relatorios, notificacoes, auditoria, PostgreSQL local, painel de saude do sistema, base inicial de seguranca/compliance, melhorias de UX para cliente real, funcionalidades essenciais de produto e base operacional de monitoramento.
 
 A preparacao para clientes reais tambem ja inclui modelo multiempresa/multicliente, com cadastro de empresas, vinculo de usuarios por empresa, campo `tenant_id` nas entidades principais e isolamento por sessao nas rotas principais.
 
@@ -64,6 +64,7 @@ docs/santuserp-ambiente-local.md       Guia de ambiente local
 docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
 docs/santuserp-deploy.md               Guia de deploy e ambientes
 docs/santuserp-qa-release.md           Checklist de QA e release
+docs/santuserp-operacao-monitoramento.md Guia de operacao e monitoramento
 scripts/start-santuserp.ps1            Inicializador local Windows
 scripts/santuserp-service.ps1          Start, stop, restart e status em background
 scripts/santuserp-service.js           Controlador de servico em background
@@ -71,6 +72,8 @@ scripts/migrate-json-to-postgres.js Migrador JSON para PostgreSQL
 scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
 scripts/restore-postgres.js        Restauracao assistida do PostgreSQL
+scripts/monitor-check.js           Monitor operacional de banco, backup e logs
+scripts/install-backup-task.ps1     Agendamento de backup diario no Windows
 scripts/smoke-test.js              Validacao automatizada basica
 scripts/permission-test.js         Teste de permissoes e multiempresa
 scripts/load-test.js               Teste de carga basico
@@ -262,6 +265,10 @@ O painel de saude consulta a rota `GET /api/health` e exibe:
 - Tipo de persistencia ativa: PostgreSQL ou JSON local.
 - Indicacao se a base esta inicializada.
 - Contagens principais por modulo.
+- Uptime do servidor.
+- Resumo de memoria do processo Node.js.
+- Resumo do backup local mais recente.
+- Resumo do log estruturado.
 - Horario da ultima verificacao.
 
 ## 8. Persistencia de dados
@@ -371,6 +378,18 @@ backups/<database>-backup-<data>.sql
 
 Os backups ficam fora do Git por padrao. Recomenda-se gerar backup antes de migracoes, alteracoes estruturais no schema, limpeza de dados ou testes de carga.
 
+Para gerar backup com retencao local:
+
+```powershell
+node scripts\backup-postgres.js --retention-days=14
+```
+
+Atalho:
+
+```powershell
+npm run backup:retention
+```
+
 ## 12. Restauracao local
 
 Para listar backups disponiveis:
@@ -392,6 +411,32 @@ node scripts\restore-postgres.js --latest --apply --confirm=RESTORE
 ```
 
 A restauracao gera um backup de seguranca antes de aplicar o arquivo escolhido. Em seguida, limpa o schema `public` e aplica o `.sql`. Esse fluxo e destrutivo para o banco atual e deve ser usado apenas quando a restauracao for realmente desejada.
+
+## 12.1. Operacao e monitoramento
+
+O guia completo esta em:
+
+```text
+docs/santuserp-operacao-monitoramento.md
+```
+
+Comando principal:
+
+```powershell
+npm run monitor
+```
+
+O monitor valida PostgreSQL, backup recente, log estruturado e sinais recentes no log de erro. O resultado fica em:
+
+```text
+runtime/monitor-status.json
+```
+
+O servidor tambem grava logs estruturados em:
+
+```text
+logs/santuserp-structured.log
+```
 
 ## 13. Deploy e ambientes
 
@@ -465,7 +510,7 @@ Checklist completo de release:
 node scripts\release-check.js
 ```
 
-Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais, smoke test, permissoes, isolamento multiempresa e carga basica.
+Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais, monitor operacional, smoke test, permissoes, isolamento multiempresa e carga basica.
 
 ## 16. Ambiente local empacotado
 
@@ -491,6 +536,8 @@ Atalhos `npm` disponiveis:
 - `npm run test:load`
 - `npm run release:check`
 - `npm run backup`
+- `npm run backup:retention`
+- `npm run monitor`
 - `npm run restore:list`
 - `npm run seed:demo`
 
@@ -707,6 +754,8 @@ Fase 2 concluida no escopo planejado:
 - Seguranca/compliance inicial com senha forte, reset temporario, auditoria de autenticacao, rate limit e rotas LGPD.
 - UX para cliente real com onboarding, perfil da empresa, preferencias, guia rapido, paginacao de listas e feedback de salvamento.
 - Funcionalidades essenciais de produto com convites assistidos, painel administrativo do cliente, notificacoes/automacoes configuraveis e exportacoes profissionais.
+- Qualidade de release com smoke, permissoes, carga basica, checklist completo e QA documentado.
+- Operacao e monitoramento com logs estruturados, health check ampliado, alertas simples de banco/backup/logs, backup com retencao, script de agendamento e teste periodico de restauracao.
 
 ## 22. Status da Fase 3
 
@@ -721,7 +770,7 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Implantar monitoramento e operacao.
+1. Preparar comercializacao, suporte e escala.
 2. Expandir automacoes com regras configuraveis avancadas.
 3. Iniciar assistente de IA para analise executiva.
 
@@ -736,4 +785,6 @@ O projeto e considerado saudavel quando:
 - Relatorios mostram dados coerentes.
 - Notificacoes sao geradas conforme vencimentos e prazos.
 - Auditoria registra acoes relevantes.
+- Monitor operacional informa banco, backup e logs.
+- Backups recentes existem e podem ser testados em modo simulacao.
 - Alteracoes sao salvas no Git e enviadas ao GitHub.

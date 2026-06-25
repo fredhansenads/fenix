@@ -12,8 +12,9 @@ A documentacao consolidada do sistema esta em:
 - `docs/santuserp-roadmap-producao.md`
 - `docs/santuserp-deploy.md`
 - `docs/santuserp-qa-release.md`
+- `docs/santuserp-operacao-monitoramento.md`
 
-Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases, roadmap de producao e proximas etapas recomendadas.
+Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, monitoramento, status das fases, roadmap de producao e proximas etapas recomendadas.
 
 ## Como abrir
 
@@ -60,6 +61,7 @@ No Windows, tambem e possivel usar o inicializador local:
 - UX para cliente real: onboarding, perfil da empresa, preferencias, listas paginadas e guia rapido
 - Produto essencial: convites assistidos, painel administrativo, notificacoes/automacoes configuraveis e exportacoes profissionais
 - Configuracoes administrativas
+- Saude do sistema com uptime, backup, logs e contagens principais
 - Listas responsivas com leitura otimizada no mobile
 
 ## Observacao tecnica
@@ -104,6 +106,12 @@ node scripts/backup-postgres.js
 
 Os arquivos sao criados em `backups/` e ficam fora do Git.
 
+Para gerar backup com retencao local de 14 dias:
+
+```bash
+npm run backup:retention
+```
+
 Para listar backups disponiveis:
 
 ```bash
@@ -136,6 +144,12 @@ Para conferir ambiente, banco, backups e scripts operacionais:
 node scripts/ops-check.js
 ```
 
+Para executar o monitor operacional de banco, backup e logs:
+
+```bash
+npm run monitor
+```
+
 Para executar a validacao completa de release:
 
 ```bash
@@ -155,6 +169,8 @@ npm run migrate:list
 npm run migrate:dry
 npm run migrate:apply
 npm run backup
+npm run backup:retention
+npm run monitor
 npm run service:status
 npm run service:start
 ```
@@ -164,6 +180,8 @@ No PowerShell do Windows, se `npm` for bloqueado pela politica de execucao, use 
 O guia completo de ambiente local esta em `docs/santuserp-ambiente-local.md`.
 
 O guia de deploy, ambientes, release e rollback esta em `docs/santuserp-deploy.md`.
+
+O guia de operacao e monitoramento esta em `docs/santuserp-operacao-monitoramento.md`.
 
 ## API local
 
@@ -233,7 +251,7 @@ O historico de atividades pode ser consultado em:
 Esse endpoint exige usuario autenticado com perfil `admin` ou `gestor`, acompanhando a restricao ja aplicada na navegacao do frontend.
 Ele aceita paginacao e filtros por `page`, `pageSize`, `query`, `action` e `collection`.
 
-A verificacao de saude do sistema pode ser consultada em `GET /api/health`, tambem restrita a `admin` e `gestor`. Ela retorna o tipo de persistencia ativo, se a base esta inicializada e as contagens principais dos modulos.
+A verificacao de saude do sistema pode ser consultada em `GET /api/health`, tambem restrita a `admin` e `gestor`. Ela retorna o tipo de persistencia ativo, se a base esta inicializada, uptime, memoria, resumo de backup, resumo de logs estruturados e as contagens principais dos modulos.
 
 As rotas modulares ja aplicam validacao basica no servidor:
 
@@ -278,4 +296,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e implantar monitoramento e operacao: logs estruturados, uptime, alertas, rotina de backup automatizada e teste periodico de restauracao.
+A proxima etapa recomendada e preparar comercializacao, suporte e escala: modelo comercial, SLA, termos, politica de privacidade, processo de implantacao, ambiente demo e documentacao para usuario final.

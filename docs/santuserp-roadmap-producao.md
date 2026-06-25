@@ -250,21 +250,25 @@ Garantir visibilidade e capacidade de resposta em producao.
 
 Entregas principais:
 
-- Logs estruturados.
-- Monitoramento de uptime.
-- Monitoramento de erros.
-- Health check de producao.
-- Alertas de falha no banco.
-- Alertas de backup.
-- Rotina automatizada de backup.
-- Teste periodico de restauracao.
-- Painel tecnico administrativo.
+- Logs estruturados. Concluido.
+- Monitoramento de uptime. Concluido.
+- Monitoramento de erros. Concluido.
+- Health check de producao. Concluido.
+- Alertas de falha no banco. Concluido.
+- Alertas de backup. Concluido.
+- Rotina automatizada de backup. Concluido.
+- Teste periodico de restauracao. Concluido.
+- Painel tecnico administrativo. Concluido.
 
 Criterio de conclusao:
 
 - Falhas sao detectadas rapidamente.
 - Backups existem e sao restauraveis.
 - Operacao nao depende apenas de observacao manual.
+
+Status:
+
+- Concluido.
 
 ## 10. Preparar comercializacao, suporte e escala
 
@@ -303,17 +307,17 @@ Criterio de conclusao:
 6. Melhorar UX/onboarding. Concluido.
 7. Completar funcionalidades essenciais de produto. Concluido.
 8. Ampliar testes e QA. Concluido.
-9. Implantar monitoramento.
+9. Implantar monitoramento. Concluido.
 10. Preparar comercializacao e suporte.
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 9 - implantar monitoramento e operacao**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX, funcionalidades essenciais e fluxo de QA/release.
+A proxima etapa mais importante e a **Etapa 10 - preparar comercializacao, suporte e escala**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX, funcionalidades essenciais, fluxo de QA/release e monitoramento operacional.
 
-Primeira entrega sugerida da Etapa 9:
+Primeira entrega sugerida da Etapa 10:
 
-- Logs estruturados de requisicao e erro.
-- Health check operacional com sinais de banco e backup.
-- Rotina automatizada de backup.
-- Alerta simples para falhas de banco/backup.
+- Modelo comercial e planos.
+- SLA e processo de suporte.
+- Termos de uso e politica de privacidade.
+- Processo de implantacao de novo cliente.
 

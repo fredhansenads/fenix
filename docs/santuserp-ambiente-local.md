@@ -61,6 +61,8 @@ npm run migrate:list
 npm run migrate:dry
 npm run migrate:apply
 npm run backup
+npm run backup:retention
+npm run monitor
 npm run restore:list
 npm run seed:demo
 npm run service:status
@@ -88,6 +90,8 @@ Principais usos:
 - `npm run migrate:dry`: simula aplicacao de migrations.
 - `npm run migrate:apply`: aplica migrations pendentes.
 - `npm run backup`: gera backup SQL local em `backups/`.
+- `npm run backup:retention`: gera backup e remove backups locais acima da retencao configurada.
+- `npm run monitor`: verifica PostgreSQL, backup recente e logs operacionais.
 - `npm run restore:list`: lista backups disponiveis.
 - `npm run seed:demo`: recria dados demonstrativos no PostgreSQL.
 - `npm run service:*`: controla o processo em background por PowerShell.
@@ -112,6 +116,12 @@ Antes de uma alteracao de banco:
 
 ```powershell
 npm run backup
+```
+
+Rotina operacional diaria:
+
+```powershell
+npm run monitor
 ```
 
 ## 6. Portas
@@ -177,6 +187,7 @@ Com este guia, o SantusERP passa a ter:
 - Checklist operacional de ambiente.
 - Smoke test automatizado.
 - Rotina documentada de backup e diagnostico.
+- Monitor operacional de banco, backup e logs.
 
 ## 10. Operacao em background
 
@@ -200,4 +211,20 @@ Logs:
 ```text
 logs/santuserp.out.log
 logs/santuserp.err.log
+logs/santuserp-structured.log
+```
+
+## 11. Backup agendado
+
+Para registrar backup diario no Agendador de Tarefas do Windows:
+
+```powershell
+.\scripts\install-backup-task.ps1 -Time "02:00" -RetentionDays 14
+```
+
+Antes de confiar no agendamento, rode manualmente:
+
+```powershell
+npm run backup:retention
+npm run monitor
 ```

@@ -9,6 +9,8 @@ const { applyPostgresMigrations } = require("./scripts/postgres-migrations");
 const root = __dirname;
 loadEnvFile(path.join(root, ".env"));
 const dataDir = path.join(root, "data");
+const logDir = path.join(root, "logs");
+const backupDir = path.join(root, "backups");
 const databaseFile = path.join(dataDir, "fenix-db.json");
 validateRuntimeConfig();
 const databaseRepository = process.env.DATABASE_URL || process.env.PGDATABASE
@@ -19,6 +21,9 @@ const host = process.env.HOST || "127.0.0.1";
 const sessions = new Map();
 const sessionTtlMs = 1000 * 60 * 60 * 8;
 const sessionCookieName = "santuserp_session";
+const serverStartedAt = new Date();
+const structuredLogFile = path.join(logDir, "santuserp-structured.log");
+const backupMaxAgeHours = Number(process.env.SANTUSERP_BACKUP_MAX_AGE_HOURS || 72);
 const loginAttempts = new Map();
 const loginWindowMs = 1000 * 60 * 15;
 const maxLoginAttempts = 5;
@@ -635,6 +640,11 @@ async function handleHealthApi(request, response) {
       source: databaseRepository.source,
       databaseInitialized: database.exists,
       checkedAt: new Date().toISOString(),
+      startedAt: serverStartedAt.toISOString(),
+      uptimeSeconds: Math.floor((Date.now() - serverStartedAt.getTime()) / 1000),
+      memory: getMemorySummary(),
+      backup: getBackupSummary(),
+      logs: getLogSummary(),
       counts: summarizeCollections(data)
     });
   } catch (error) {
@@ -1513,6 +1523,76 @@ function summarizeCollections(data) {
   }, {});
 }
 
+function getMemorySummary() {
+  const usage = process.memoryUsage();
+  return {
+    rssMb: bytesToMb(usage.rss),
+    heapUsedMb: bytesToMb(usage.heapUsed),
+    heapTotalMb: bytesToMb(usage.heapTotal)
+  };
+}
+
+function bytesToMb(value) {
+  return Math.round((Number(value || 0) / 1024 / 1024) * 10) / 10;
+}
+
+function getBackupSummary() {
+  const latest = getLatestBackup();
+  if (!latest) {
+    return {
+      ok: false,
+      status: "missing",
+      message: "Nenhum backup encontrado.",
+      maxAgeHours: backupMaxAgeHours
+    };
+  }
+  const ageHours = Math.round(((Date.now() - latest.modifiedAt.getTime()) / 36e5) * 10) / 10;
+  return {
+    ok: ageHours <= backupMaxAgeHours,
+    status: ageHours <= backupMaxAgeHours ? "ok" : "stale",
+    latestFile: latest.name,
+    latestAt: latest.modifiedAt.toISOString(),
+    ageHours,
+    sizeBytes: latest.size,
+    maxAgeHours: backupMaxAgeHours,
+    message: ageHours <= backupMaxAgeHours ? "Backup recente encontrado." : "Backup mais recente esta antigo."
+  };
+}
+
+function getLatestBackup() {
+  if (!fs.existsSync(backupDir)) return null;
+  const backups = fs.readdirSync(backupDir)
+    .filter((name) => name.endsWith(".sql") || name.endsWith(".dump"))
+    .map((name) => {
+      const filePath = path.join(backupDir, name);
+      const stats = fs.statSync(filePath);
+      return { name, filePath, size: stats.size, modifiedAt: stats.mtime };
+    })
+    .sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
+  return backups[0] || null;
+}
+
+function getLogSummary() {
+  const latest = getLatestStructuredLog();
+  return {
+    structured: fs.existsSync(structuredLogFile),
+    latestAt: latest?.createdAt || "",
+    latestEvent: latest?.event || "",
+    file: path.relative(root, structuredLogFile)
+  };
+}
+
+function getLatestStructuredLog() {
+  if (!fs.existsSync(structuredLogFile)) return null;
+  const lines = fs.readFileSync(structuredLogFile, "utf-8").trim().split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return null;
+  try {
+    return JSON.parse(lines[lines.length - 1]);
+  } catch {
+    return null;
+  }
+}
+
 function getNotificationReadIds(data, userId) {
   const reads = Array.isArray(data?.notificationReads) ? data.notificationReads : [];
   return [...new Set(reads.map((read) => {
@@ -2293,10 +2373,31 @@ function sqlLiteral(value) {
 
 const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url, `http://${host}:${port}`);
+  const requestId = crypto.randomBytes(6).toString("hex");
+  const startedAt = Date.now();
+  response.setHeader("X-SantusERP-Request-Id", requestId);
+  response.on("finish", () => {
+    logStructured("http_request", {
+      requestId,
+      method: request.method,
+      path: requestUrl.pathname,
+      statusCode: response.statusCode,
+      durationMs: Date.now() - startedAt,
+      ip: getRequestIp(request),
+      userAgent: request.headers["user-agent"] || ""
+    });
+  });
 
   if (requestUrl.pathname.startsWith("/api/")) {
     handleApi(request, response, requestUrl).catch((error) => {
       console.error(error);
+      logStructured("http_error", {
+        requestId,
+        method: request.method,
+        path: requestUrl.pathname,
+        message: error.message,
+        stack: process.env.NODE_ENV === "production" ? "" : error.stack
+      });
       if (!response.headersSent) {
         sendJson(response, 500, {
           error: "Internal server error",
@@ -2334,5 +2435,28 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
+  logStructured("server_started", {
+    host,
+    port,
+    source: databaseRepository.source,
+    nodeEnv: process.env.NODE_ENV || "development"
+  });
   console.log(`SantusERP available at http://${host}:${port}`);
 });
+
+function logStructured(event, payload = {}) {
+  const record = {
+    createdAt: new Date().toISOString(),
+    event,
+    service: "SantusERP",
+    ...payload
+  };
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(structuredLogFile, `${JSON.stringify(record)}\n`, "utf-8");
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`Falha ao gravar log estruturado: ${error.message}`);
+    }
+  }
+}

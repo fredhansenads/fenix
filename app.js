@@ -3245,6 +3245,19 @@ function formatDateTime(value) {
   });
 }
 
+function formatDuration(seconds) {
+  const totalSeconds = Math.max(0, Number(seconds || 0));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = Math.floor(totalSeconds % 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}min`;
+  if (minutes > 0) return `${minutes}min ${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
+}
+
 function renderSettings() {
   const tenant = getCurrentTenant();
   const settings = getTenantSettings();
@@ -3681,12 +3694,16 @@ function renderHealthStatus(health = null) {
   }
 
   const counts = health.counts || {};
+  const backup = health.backup || {};
+  const memory = health.memory || {};
   const keyCounts = ["users", "clients", "suppliers", "proposals", "contracts", "projects", "tasks", "payables", "receivables"];
   return `
     <div class="health-summary">
-      <span class="status success">Operacional</span>
+      <span class="status ${backup.ok === false ? "warning" : "success"}">Operacional</span>
       <strong>Persistencia: ${health.source === "postgres" ? "PostgreSQL" : "JSON local"}</strong>
-      <p>Ultima verificacao: ${formatDateTime(health.checkedAt)}</p>
+      <p>Ultima verificacao: ${formatDateTime(health.checkedAt)} - Uptime: ${formatDuration(health.uptimeSeconds || 0)}</p>
+      <p>Backup: ${escapeHtml(backup.message || "Sem informacao de backup.")}${backup.latestAt ? ` - ${formatDateTime(backup.latestAt)}` : ""}</p>
+      <p>Memoria: ${memory.heapUsedMb || 0} MB em uso de heap - RSS ${memory.rssMb || 0} MB</p>
     </div>
     <div class="health-grid">
       ${keyCounts.map((key) => `

@@ -54,6 +54,18 @@ Esse comando verifica:
 - Backups existentes.
 - Scripts operacionais.
 
+Para verificar sinais operacionais de banco, backup e logs:
+
+```powershell
+npm run monitor
+```
+
+O resultado detalhado e salvo em:
+
+```text
+runtime/monitor-status.json
+```
+
 Para validacao completa de release:
 
 ```powershell
@@ -111,6 +123,12 @@ Atalho equivalente:
 npm run backup
 ```
 
+Backup com retencao local de 14 dias:
+
+```powershell
+npm run backup:retention
+```
+
 Os arquivos sao criados em:
 
 ```text
@@ -118,6 +136,12 @@ backups/
 ```
 
 Backups ficam fora do Git por padrao.
+
+Para agendar backup diario no Windows:
+
+```powershell
+.\scripts\install-backup-task.ps1 -Time "02:00" -RetentionDays 14
+```
 
 ## 5. Listar backups
 
@@ -168,16 +192,20 @@ Conferir:
 - Status operacional.
 - Persistencia PostgreSQL.
 - Base inicializada.
+- Uptime.
+- Backup mais recente.
+- Memoria do processo.
 - Contagens principais.
 
 ## 10. Rotina recomendada antes de apresentacoes
 
 1. Rodar `npm run check`.
-2. Rodar `npm run smoke`.
-3. Gerar backup com `npm run backup`.
-4. Iniciar `.\scripts\start-santuserp.ps1 -Open`.
-5. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
-6. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
+2. Rodar `npm run monitor`.
+3. Rodar `npm run smoke`.
+4. Gerar backup com `npm run backup`.
+5. Iniciar `.\scripts\start-santuserp.ps1 -Open`.
+6. Entrar no sistema e abrir `Configuracoes > Saude do sistema`.
+7. Navegar por Dashboard, Clientes, Financeiro, Propostas, Projetos, Tarefas, Relatorios e Historico.
 
 ## 11. Rotina recomendada antes de mudancas tecnicas
 
@@ -195,9 +223,10 @@ Conferir:
 2. Rodar `npm run check`.
 3. Rodar `npm run smoke`.
 4. Rodar `npm run migrate:dry`.
-5. Gerar backup com `npm run backup`.
-6. Aplicar migrations com `npm run migrate:apply`.
-7. Reiniciar com `node scripts\santuserp-service.js restart --env .env.production`.
-8. Conferir `node scripts\santuserp-service.js status`.
-9. Conferir `logs/santuserp.err.log`.
-10. Fazer login e abrir `Configuracoes > Saude do sistema`.
+5. Gerar backup com `npm run backup:retention`.
+6. Rodar `npm run monitor`.
+7. Aplicar migrations com `npm run migrate:apply`.
+8. Reiniciar com `node scripts\santuserp-service.js restart --env .env.production`.
+9. Conferir `node scripts\santuserp-service.js status`.
+10. Conferir `logs/santuserp.err.log`.
+11. Fazer login e abrir `Configuracoes > Saude do sistema`.

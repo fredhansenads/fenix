@@ -4,10 +4,11 @@ const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 const backupDir = path.join(root, "backups");
+const args = process.argv.slice(2);
 
 loadEnvFile(path.join(root, ".env"));
 
-if (process.argv.includes("--help")) {
+if (args.includes("--help")) {
   printHelp();
   process.exit(0);
 }
@@ -31,19 +32,40 @@ function main() {
     process.exit(result.status || 1);
   }
 
+  const retentionDays = Number(getArgValue("--retention-days") || process.env.SANTUSERP_BACKUP_RETENTION_DAYS || 0);
+  const removed = retentionDays > 0 ? cleanupOldBackups(retentionDays) : [];
+  const payload = {
+    ok: true,
+    file: outputFile,
+    retentionDays,
+    removed
+  };
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(payload));
+    return;
+  }
   console.log(`Backup gerado com sucesso: ${outputFile}`);
+  if (removed.length) {
+    console.log(`Backups antigos removidos: ${removed.length}`);
+  }
 }
 
 function printHelp() {
   console.log(`
 Uso:
   node scripts/backup-postgres.js
+  node scripts/backup-postgres.js --retention-days=14
+  node scripts/backup-postgres.js --json
 
 Objetivo:
   Gerar um backup SQL local do banco PostgreSQL configurado no .env.
 
 Saida:
   backups/<database>-backup-<data>.sql
+
+Retencao:
+  --retention-days=N remove backups locais mais antigos que N dias apos gerar novo backup.
 
 Configuracao:
   DATABASE_URL=postgres://usuario:senha@localhost:5432/fenix
@@ -119,4 +141,26 @@ function parseDatabaseFromUrl(databaseUrl) {
   } catch {
     return "";
   }
+}
+
+function cleanupOldBackups(retentionDays) {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  return fs.readdirSync(backupDir)
+    .filter((name) => name.endsWith(".sql") || name.endsWith(".dump"))
+    .map((name) => {
+      const filePath = path.join(backupDir, name);
+      return { name, filePath, stats: fs.statSync(filePath) };
+    })
+    .filter((backup) => backup.stats.mtime.getTime() < cutoff)
+    .map((backup) => {
+      fs.rmSync(backup.filePath, { force: true });
+      return backup.name;
+    });
+}
+
+function getArgValue(name) {
+  const inline = args.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1).trim();
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] || "" : "";
 }

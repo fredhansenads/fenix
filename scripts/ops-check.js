@@ -148,7 +148,11 @@ function checkBackups() {
     addResult("Backups", "aviso", "Nenhum backup encontrado em backups/.");
     return;
   }
-  addResult("Backups", "ok", `Mais recente: ${backups[0].name} (${backups[0].stats.size} bytes).`);
+
+  const maxAgeHours = Number(process.env.SANTUSERP_BACKUP_MAX_AGE_HOURS || 72);
+  const ageHours = Math.round(((Date.now() - backups[0].stats.mtime.getTime()) / 36e5) * 10) / 10;
+  const status = ageHours <= maxAgeHours ? "ok" : "aviso";
+  addResult("Backups", status, `Mais recente: ${backups[0].name} (${backups[0].stats.size} bytes, ${ageHours}h, limite ${maxAgeHours}h).`);
 }
 
 function checkScripts() {
@@ -163,7 +167,9 @@ function checkScripts() {
     "smoke-test.js",
     "permission-test.js",
     "load-test.js",
-    "release-check.js"
+    "release-check.js",
+    "monitor-check.js",
+    "install-backup-task.ps1"
   ];
   const missing = requiredScripts.filter((script) => !fs.existsSync(path.join(root, "scripts", script)));
   addResult("Scripts operacionais", missing.length ? "falha" : "ok", missing.length ? `Faltando: ${missing.join(", ")}` : "Scripts principais encontrados.");

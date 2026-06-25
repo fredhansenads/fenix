@@ -62,7 +62,7 @@ O servidor tambem aplica migrations pendentes automaticamente ao iniciar. Ainda 
 Antes de qualquer deploy:
 
 ```powershell
-npm run backup
+npm run backup:retention
 ```
 
 Confirme se o arquivo foi criado em:
@@ -108,6 +108,7 @@ Logs:
 ```text
 logs/santuserp.out.log
 logs/santuserp.err.log
+logs/santuserp-structured.log
 ```
 
 PID:
@@ -141,10 +142,11 @@ Antes do deploy:
 1. Confirmar Git limpo.
 2. Confirmar branch e commit que sera publicado.
 3. Rodar `npm run check`.
-4. Rodar `npm run smoke`.
-5. Rodar `npm run migrate:dry`.
-6. Gerar backup com `npm run backup`.
-7. Conferir `.env` do ambiente.
+4. Rodar `npm run monitor`.
+5. Rodar `npm run smoke`.
+6. Rodar `npm run migrate:dry`.
+7. Gerar backup com `npm run backup:retention`.
+8. Conferir `.env` do ambiente.
 
 Durante o deploy:
 
@@ -153,15 +155,17 @@ Durante o deploy:
 3. Iniciar/reiniciar o servico com `npm run service:restart`.
 4. Conferir status do processo.
 5. Conferir logs.
+6. Rodar `npm run monitor`.
 
 Depois do deploy:
 
 1. Rodar `npm run check`.
-2. Acessar o dominio HTTPS.
-3. Fazer login administrativo.
-4. Abrir `Configuracoes > Saude do sistema`.
-5. Validar Dashboard, Clientes, Financeiro, Projetos e Relatorios.
-6. Registrar commit, data, responsavel e observacoes da release.
+2. Rodar `npm run monitor`.
+3. Acessar o dominio HTTPS.
+4. Fazer login administrativo.
+5. Abrir `Configuracoes > Saude do sistema`.
+6. Validar Dashboard, Clientes, Financeiro, Projetos e Relatorios.
+7. Registrar commit, data, responsavel e observacoes da release.
 
 ## 8. Rollback
 
@@ -186,3 +190,30 @@ A Etapa 4 e considerada concluida quando:
 - Migrations possuem comando operacional.
 - Existe processo documentado de start, stop, restart e status.
 - Existe checklist de release e rollback.
+
+## 10. Monitoramento operacional
+
+O guia completo de operacao fica em:
+
+```text
+docs/santuserp-operacao-monitoramento.md
+```
+
+Comando principal:
+
+```powershell
+npm run monitor
+```
+
+O monitor grava o resultado em:
+
+```text
+runtime/monitor-status.json
+```
+
+Em producao, recomenda-se validar diariamente:
+
+- PostgreSQL respondendo.
+- Backup dentro da janela definida por `SANTUSERP_BACKUP_MAX_AGE_HOURS`.
+- `logs/santuserp-structured.log` sendo atualizado.
+- `logs/santuserp.err.log` sem ocorrencias criticas recentes.
