@@ -14,6 +14,7 @@ Status geral atual:
 - Etapa 5 deste roadmap concluida como entrega inicial: politica de senha forte, recuperacao de senha com token temporario, auditoria de login/logout/falhas, rate limit em recuperacao e rotas LGPD para exportacao e anonimizacao controlada.
 - Etapa 6 deste roadmap concluida: onboarding inicial, perfil da empresa, preferencias por empresa, listas paginadas, guia rapido e feedback visual de salvamento.
 - Etapa 7 deste roadmap concluida: convites assistidos de usuarios, configuracoes funcionais por empresa, relatorios/exportacoes profissionais, notificacoes e automacoes configuraveis e painel administrativo do cliente.
+- Etapa 8 deste roadmap concluida: release-check automatizado, teste de permissoes/multiempresa, teste de carga basico, checklist de QA e documentacao de release.
 
 ## 1. Preparar autenticacao e sessoes para producao
 
@@ -221,21 +222,25 @@ Reduzir regressoes antes de entregar para clientes.
 
 Entregas principais:
 
-- Testes automatizados por modulo.
-- Testes de autenticacao.
-- Testes de permissao.
-- Testes de multiempresa.
-- Testes de financeiro.
-- Testes de relatorios.
-- Testes end-to-end dos fluxos principais.
-- Checklist de QA.
-- Teste de carga basico.
+- Testes automatizados por modulo. Iniciado com smoke funcional cobrindo modulos principais.
+- Testes de autenticacao. Concluido no smoke e permission-test.
+- Testes de permissao. Concluido em `scripts/permission-test.js`.
+- Testes de multiempresa. Concluido em smoke e permission-test.
+- Testes de financeiro. Coberto no smoke, permission-test e relatorios.
+- Testes de relatorios. Coberto por exportacoes e release-check.
+- Testes end-to-end dos fluxos principais. Concluido em `scripts/smoke-test.js`.
+- Checklist de QA. Concluido em `docs/santuserp-qa-release.md`.
+- Teste de carga basico. Concluido em `scripts/load-test.js`.
 
 Criterio de conclusao:
 
 - `npm run check:full` cobre fluxos criticos.
 - Release so acontece com checklist aprovado.
 - Bugs regressivos ficam mais dificeis de passar.
+
+Status:
+
+- Concluido.
 
 ## 9. Implantar monitoramento e operacao
 
@@ -297,18 +302,18 @@ Criterio de conclusao:
 5. Reforcar compliance e auditoria. Concluido como base inicial.
 6. Melhorar UX/onboarding. Concluido.
 7. Completar funcionalidades essenciais de produto. Concluido.
-8. Ampliar testes e QA.
+8. Ampliar testes e QA. Concluido.
 9. Implantar monitoramento.
 10. Preparar comercializacao e suporte.
 
 ## Proxima etapa tecnica recomendada
 
-A proxima etapa mais importante e a **Etapa 8 - criar testes e qualidade de release**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX para cliente real e funcionalidades essenciais de produto.
+A proxima etapa mais importante e a **Etapa 9 - implantar monitoramento e operacao**, porque o sistema ja possui base operacional, multiempresa, migrations, preparo de deploy, seguranca/compliance inicial, UX, funcionalidades essenciais e fluxo de QA/release.
 
-Primeira entrega sugerida da Etapa 8:
+Primeira entrega sugerida da Etapa 9:
 
-- Organizar testes automatizados por modulo.
-- Ampliar testes de permissao e multiempresa.
-- Criar checklist de QA por release.
-- Preparar teste de carga basico.
+- Logs estruturados de requisicao e erro.
+- Health check operacional com sinais de banco e backup.
+- Rotina automatizada de backup.
+- Alerta simples para falhas de banco/backup.
 

@@ -11,6 +11,7 @@ A documentacao consolidada do sistema esta em:
 - `docs/santuserp-ambiente-local.md`
 - `docs/santuserp-roadmap-producao.md`
 - `docs/santuserp-deploy.md`
+- `docs/santuserp-qa-release.md`
 
 Ela descreve visao geral, modulos, regras de negocio, API, PostgreSQL, rotinas locais, checklist operacional, status das fases, roadmap de producao e proximas etapas recomendadas.
 
@@ -135,10 +136,10 @@ Para conferir ambiente, banco, backups e scripts operacionais:
 node scripts/ops-check.js
 ```
 
-Para incluir o smoke test na mesma checagem:
+Para executar a validacao completa de release:
 
 ```bash
-node scripts/ops-check.js --with-smoke
+node scripts/release-check.js
 ```
 
 Atalhos equivalentes tambem estao disponiveis via `npm`:
@@ -147,6 +148,9 @@ Atalhos equivalentes tambem estao disponiveis via `npm`:
 npm start
 npm run check
 npm run check:full
+npm run release:check
+npm run test:permissions
+npm run test:load
 npm run migrate:list
 npm run migrate:dry
 npm run migrate:apply
@@ -274,4 +278,4 @@ Quando um perfil tenta executar uma acao nao autorizada, a API retorna `403 Forb
 
 O frontend interpreta esses retornos nas acoes principais de cadastro, edicao, exclusao e auditoria, exibindo mensagens claras para sessao invalida, permissao negada e validacoes recusadas pela API. Em respostas `401`, a sessao local e encerrada e o usuario retorna para a tela de login.
 
-A proxima etapa recomendada e criar testes e qualidade de release: cobertura por modulo, permissoes, multiempresa, QA de release e teste de carga basico.
+A proxima etapa recomendada e implantar monitoramento e operacao: logs estruturados, uptime, alertas, rotina de backup automatizada e teste periodico de restauracao.

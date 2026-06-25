@@ -6,8 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/ops-check.js",
-    "check:full": "node scripts/ops-check.js --with-smoke",
+    "check:full": "node scripts/release-check.js",
     "smoke": "node scripts/smoke-test.js",
+    "test:permissions": "node scripts/permission-test.js",
+    "test:load": "node scripts/load-test.js",
+    "release:check": "node scripts/release-check.js",
     "migrate:list": "node scripts/apply-postgres-migrations.js --list",
     "migrate:dry": "node scripts/apply-postgres-migrations.js --dry-run",
     "migrate:apply": "node scripts/apply-postgres-migrations.js --apply",

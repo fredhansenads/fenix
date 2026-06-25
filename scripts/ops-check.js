@@ -160,7 +160,10 @@ function checkScripts() {
     "postgres-migrations.js",
     "santuserp-service.js",
     "santuserp-service.ps1",
-    "smoke-test.js"
+    "smoke-test.js",
+    "permission-test.js",
+    "load-test.js",
+    "release-check.js"
   ];
   const missing = requiredScripts.filter((script) => !fs.existsSync(path.join(root, "scripts", script)));
   addResult("Scripts operacionais", missing.length ? "falha" : "ok", missing.length ? `Faltando: ${missing.join(", ")}` : "Scripts principais encontrados.");

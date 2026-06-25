@@ -54,6 +54,9 @@ npm start
 npm run check
 npm run check:full
 npm run smoke
+npm run test:permissions
+npm run test:load
+npm run release:check
 npm run migrate:list
 npm run migrate:dry
 npm run migrate:apply
@@ -76,8 +79,11 @@ Principais usos:
 
 - `npm start`: inicia o servidor local.
 - `npm run check`: valida Node.js, PostgreSQL, tabelas, backups e scripts.
-- `npm run check:full`: executa checklist operacional com smoke test.
+- `npm run check:full`: executa validacao completa de release.
 - `npm run smoke`: sobe API temporaria e valida login, PostgreSQL, bootstrap, cliente, auditoria e notificacoes.
+- `npm run test:permissions`: valida permissoes, bloqueios e isolamento multiempresa.
+- `npm run test:load`: executa carga basica autenticada.
+- `npm run release:check`: executa a mesma rotina completa de `check:full`.
 - `npm run migrate:list`: lista migrations aplicadas e pendentes.
 - `npm run migrate:dry`: simula aplicacao de migrations.
 - `npm run migrate:apply`: aplica migrations pendentes.

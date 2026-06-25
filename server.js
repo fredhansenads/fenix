@@ -1983,6 +1983,11 @@ function runPsql(extraArgs, input = "") {
       stderr += chunk.toString("utf-8");
     });
     child.on("error", reject);
+    child.stdin.on("error", (error) => {
+      if (!["EPIPE", "EOF"].includes(error.code)) {
+        reject(error);
+      }
+    });
     child.on("close", (code) => {
       if (code === 0) {
         resolve(stdout);
@@ -2290,7 +2295,17 @@ const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url, `http://${host}:${port}`);
 
   if (requestUrl.pathname.startsWith("/api/")) {
-    handleApi(request, response, requestUrl);
+    handleApi(request, response, requestUrl).catch((error) => {
+      console.error(error);
+      if (!response.headersSent) {
+        sendJson(response, 500, {
+          error: "Internal server error",
+          message: "Falha interna ao processar a requisicao."
+        });
+      } else {
+        response.end();
+      }
+    });
     return;
   }
 

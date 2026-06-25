@@ -54,10 +54,10 @@ Esse comando verifica:
 - Backups existentes.
 - Scripts operacionais.
 
-Para incluir o smoke test:
+Para validacao completa de release:
 
 ```powershell
-node scripts\ops-check.js --with-smoke
+node scripts\release-check.js
 ```
 
 Atalho equivalente:
@@ -86,6 +86,18 @@ O smoke test valida:
 - Criacao, edicao e exclusao de cliente temporario.
 - Auditoria paginada.
 - Notificacoes lidas.
+- Reset de senha.
+- Compliance inicial.
+- Preferencias da empresa.
+
+## 3.1. Rodar testes de permissoes e carga
+
+```powershell
+npm run test:permissions
+npm run test:load
+```
+
+Esses testes validam isolamento multiempresa, bloqueios por perfil e desempenho basico autenticado.
 
 ## 4. Gerar backup
 

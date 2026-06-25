@@ -63,6 +63,7 @@ docs/santuserp-checklist-operacional.md Checklist operacional local
 docs/santuserp-ambiente-local.md       Guia de ambiente local
 docs/santuserp-roadmap-producao.md     Roadmap para clientes reais
 docs/santuserp-deploy.md               Guia de deploy e ambientes
+docs/santuserp-qa-release.md           Checklist de QA e release
 scripts/start-santuserp.ps1            Inicializador local Windows
 scripts/santuserp-service.ps1          Start, stop, restart e status em background
 scripts/santuserp-service.js           Controlador de servico em background
@@ -71,6 +72,9 @@ scripts/seed-postgres-demo.js      Seed demonstrativo PostgreSQL
 scripts/backup-postgres.js         Backup SQL local do PostgreSQL
 scripts/restore-postgres.js        Restauracao assistida do PostgreSQL
 scripts/smoke-test.js              Validacao automatizada basica
+scripts/permission-test.js         Teste de permissoes e multiempresa
+scripts/load-test.js               Teste de carga basico
+scripts/release-check.js           Validacao completa de release
 scripts/ops-check.js               Checklist operacional automatizado
 ```
 
@@ -455,13 +459,13 @@ Checklist automatizado:
 node scripts\ops-check.js
 ```
 
-Checklist automatizado com smoke test:
+Checklist completo de release:
 
 ```powershell
-node scripts\ops-check.js --with-smoke
+node scripts\release-check.js
 ```
 
-Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais e, opcionalmente, os principais fluxos da API.
+Esse fluxo valida ambiente local, PostgreSQL, backups, scripts operacionais, smoke test, permissoes, isolamento multiempresa e carga basica.
 
 ## 16. Ambiente local empacotado
 
@@ -483,6 +487,9 @@ Atalhos `npm` disponiveis:
 - `npm run check`
 - `npm run check:full`
 - `npm run smoke`
+- `npm run test:permissions`
+- `npm run test:load`
+- `npm run release:check`
 - `npm run backup`
 - `npm run restore:list`
 - `npm run seed:demo`
@@ -714,7 +721,7 @@ Fase 3 iniciada:
 
 ## 23. Proximas etapas recomendadas
 
-1. Criar testes e qualidade de release.
+1. Implantar monitoramento e operacao.
 2. Expandir automacoes com regras configuraveis avancadas.
 3. Iniciar assistente de IA para analise executiva.
 
